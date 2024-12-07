@@ -1,5 +1,9 @@
 # Roo Cline Changelog
 
+## [2.1.11]
+
+- Fix [bug in parsing of nested tool calls](https://github.com/cline/cline/issues/832)
+
 ## [2.1.10]
 
 - Incorporate HeavenOSK's [PR](https://github.com/cline/cline/pull/818) to add sound effects to Cline

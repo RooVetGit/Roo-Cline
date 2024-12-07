@@ -1,143 +1,140 @@
 import {
 	AssistantMessageContent,
-	TextContent,
-	ToolUse,
 	ToolParamName,
 	toolParamNames,
 	toolUseNames,
 	ToolUseName,
 } from "."
 
+/**
+ * Parses an assistant message containing text and tool use blocks.
+ *
+ * Algorithm:
+ * 1. Iteratively processes the message string until no content remains
+ * 2. For each iteration:
+ *    - Searches for the next tool tag (format: <tool_name>)
+ *    - If no tool found, treats remaining content as text and exits
+ *    - Validates the tool name against known tools
+ *    - Extracts any text content before the tool as a separate block
+ *    - Locates the tool's closing tag (</tool_name>) by finding the LAST matching
+ *      closing tag in the remaining text. This ensures we match the outermost
+ *      tags when there are nested tools of the same type
+ *    - Parses tool parameters within the tool block:
+ *      * Parameters follow format: <param_name>value</param_name>
+ *      * Orders parameters by position and extracts values
+ *      * Filters out empty parameters
+ *    - Creates a tool_use block with parsed parameters
+ *    - Continues with remaining text after the tool's closing tag
+ *
+ * Returns an array of content blocks, where each block is either:
+ * - Text content: { type: "text", content: string, partial: boolean }
+ * - Tool use: { type: "tool_use", name: string, params: Record<string, string>, partial: boolean }
+ */
+
 export function parseAssistantMessage(assistantMessage: string) {
-	let contentBlocks: AssistantMessageContent[] = []
-	let currentTextContent: TextContent | undefined = undefined
-	let currentTextContentStartIndex = 0
-	let currentToolUse: ToolUse | undefined = undefined
-	let currentToolUseStartIndex = 0
-	let currentParamName: ToolParamName | undefined = undefined
-	let currentParamValueStartIndex = 0
-	let accumulator = ""
+    let contentBlocks: AssistantMessageContent[] = []
+    let remainingText = assistantMessage
 
-	for (let i = 0; i < assistantMessage.length; i++) {
-		const char = assistantMessage[i]
-		accumulator += char
+    while (remainingText.length > 0) {
+        // Look for the next tool use from the start
+        const toolMatch = remainingText.match(/<([\w_]+)>/) as RegExpMatchArray
 
-		// there should not be a param without a tool use
-		if (currentToolUse && currentParamName) {
-			const currentParamValue = accumulator.slice(currentParamValueStartIndex)
-			const paramClosingTag = `</${currentParamName}>`
-			if (currentParamValue.endsWith(paramClosingTag)) {
-				// end of param value
-				currentToolUse.params[currentParamName] = currentParamValue.slice(0, -paramClosingTag.length).trim()
-				currentParamName = undefined
-				continue
-			} else {
-				// partial param value is accumulating
-				continue
-			}
-		}
+        if (!toolMatch) {
+            // No more tools, rest is text
+            if (remainingText.trim()) {
+                contentBlocks.push({
+                    type: "text",
+                    content: remainingText.trim(),
+                    partial: true
+                })
+            }
+            break
+        }
 
-		// no currentParamName
+        const toolName = toolMatch[1] as ToolUseName
+        if (!toolUseNames.includes(toolName)) {
+            // Find the closing tag for this invalid tool
+            const invalidClosingTag = `</${toolName}>`
+            const closeIndex = remainingText.indexOf(invalidClosingTag)
+            
+            // Take the entire invalid tag block as text
+            const textBlock = closeIndex !== -1
+                ? remainingText.slice(0, closeIndex + invalidClosingTag.length)
+                : remainingText.slice(0, toolMatch.index! + toolMatch[0].length)
+                
+            contentBlocks.push({
+                type: "text",
+                content: textBlock,
+                partial: false
+            })
+            
+            remainingText = closeIndex !== -1
+                ? remainingText.slice(closeIndex + invalidClosingTag.length)
+                : remainingText.slice(toolMatch.index! + toolMatch[0].length)
+            continue
+        }
 
-		if (currentToolUse) {
-			const currentToolValue = accumulator.slice(currentToolUseStartIndex)
-			const toolUseClosingTag = `</${currentToolUse.name}>`
-			if (currentToolValue.endsWith(toolUseClosingTag)) {
-				// end of a tool use
-				currentToolUse.partial = false
-				contentBlocks.push(currentToolUse)
-				currentToolUse = undefined
-				continue
-			} else {
-				const possibleParamOpeningTags = toolParamNames.map((name) => `<${name}>`)
-				for (const paramOpeningTag of possibleParamOpeningTags) {
-					if (accumulator.endsWith(paramOpeningTag)) {
-						// start of a new parameter
-						currentParamName = paramOpeningTag.slice(1, -1) as ToolParamName
-						currentParamValueStartIndex = accumulator.length
-						break
-					}
-				}
+        // If there's text before the tool, add it as a block
+        const textBeforeTool = remainingText.slice(0, toolMatch.index).trim()
+        if (textBeforeTool) {
+            contentBlocks.push({
+                type: "text",
+                content: textBeforeTool,
+                partial: false
+            })
+        }
 
-				// there's no current param, and not starting a new param
+        // Find the matching closing tag
+        const toolClosingTag = `</${toolName}>`
+        const toolCloseIndex = remainingText.lastIndexOf(toolClosingTag)
 
-				// special case for write_to_file where file contents could contain the closing tag, in which case the param would have closed and we end up with the rest of the file contents here. To work around this, we get the string between the starting content tag and the LAST content tag.
-				const contentParamName: ToolParamName = "content"
-				if (currentToolUse.name === "write_to_file" && accumulator.endsWith(`</${contentParamName}>`)) {
-					const toolContent = accumulator.slice(currentToolUseStartIndex)
-					const contentStartTag = `<${contentParamName}>`
-					const contentEndTag = `</${contentParamName}>`
-					const contentStartIndex = toolContent.indexOf(contentStartTag) + contentStartTag.length
-					const contentEndIndex = toolContent.lastIndexOf(contentEndTag)
-					if (contentStartIndex !== -1 && contentEndIndex !== -1 && contentEndIndex > contentStartIndex) {
-						currentToolUse.params[contentParamName] = toolContent
-							.slice(contentStartIndex, contentEndIndex)
-							.trim()
-					}
-				}
+        // Extract tool content
+        const matchIndex = toolMatch!.index!
+        const matchLength = toolMatch![0]!.length
+        const toolContent = toolCloseIndex === -1
+            ? remainingText.slice(matchIndex + matchLength)
+            : remainingText.slice(matchIndex + matchLength, toolCloseIndex)
 
-				// partial tool value is accumulating
-				continue
-			}
-		}
+        // Parse parameters
+        const params: Record<ToolParamName, string> = Object.fromEntries(
+            toolParamNames.map(name => [name, ""])
+        ) as Record<ToolParamName, string>
 
-		// no currentToolUse
+        const paramPositions = toolParamNames.map(name => ({
+            name,
+            start: toolContent.indexOf(`<${name}>`)
+        })).filter(p => p.start !== -1).sort((a, b) => a.start - b.start)
 
-		let didStartToolUse = false
-		const possibleToolUseOpeningTags = toolUseNames.map((name) => `<${name}>`)
-		for (const toolUseOpeningTag of possibleToolUseOpeningTags) {
-			if (accumulator.endsWith(toolUseOpeningTag)) {
-				// start of a new tool use
-				currentToolUse = {
-					type: "tool_use",
-					name: toolUseOpeningTag.slice(1, -1) as ToolUseName,
-					params: {},
-					partial: true,
-				}
-				currentToolUseStartIndex = accumulator.length
-				// this also indicates the end of the current text content
-				if (currentTextContent) {
-					currentTextContent.partial = false
-					// remove the partially accumulated tool use tag from the end of text (<tool)
-					currentTextContent.content = currentTextContent.content
-						.slice(0, -toolUseOpeningTag.slice(0, -1).length)
-						.trim()
-					contentBlocks.push(currentTextContent)
-					currentTextContent = undefined
-				}
+        for (let i = 0; i < paramPositions.length; i++) {
+            const param = paramPositions[i]
+            const nextStart = paramPositions[i + 1]?.start || toolContent.length
+            const valueStart = param.start + param.name.length + 2
+            const valueEnd = toolContent.lastIndexOf(`</${param.name}>`, nextStart)
 
-				didStartToolUse = true
-				break
-			}
-		}
+            if (valueEnd > valueStart) {
+                params[param.name] = toolContent.slice(valueStart, valueEnd).trim()
+            } else {
+                params[param.name] = toolContent.slice(valueStart).trim()
+            }
+        }
 
-		if (!didStartToolUse) {
-			// no tool use, so it must be text either at the beginning or between tools
-			if (currentTextContent === undefined) {
-				currentTextContentStartIndex = i
-			}
-			currentTextContent = {
-				type: "text",
-				content: accumulator.slice(currentTextContentStartIndex).trim(),
-				partial: true,
-			}
-		}
-	}
+        // Filter out empty parameters
+        const nonEmptyParams = Object.fromEntries(
+            Object.entries(params).filter(([_, value]) => value !== "")
+        ) as Record<ToolParamName, string>
 
-	if (currentToolUse) {
-		// stream did not complete tool call, add it as partial
-		if (currentParamName) {
-			// tool call has a parameter that was not completed
-			currentToolUse.params[currentParamName] = accumulator.slice(currentParamValueStartIndex).trim()
-		}
-		contentBlocks.push(currentToolUse)
-	}
+        contentBlocks.push({
+            type: "tool_use",
+            name: toolName,
+            params: nonEmptyParams,
+            partial: toolCloseIndex === -1
+        })
 
-	// Note: it doesnt matter if check for currentToolUse or currentTextContent, only one of them will be defined since only one can be partial at a time
-	if (currentTextContent) {
-		// stream did not complete text content, add it as partial
-		contentBlocks.push(currentTextContent)
-	}
+        // Move past this tool
+        remainingText = toolCloseIndex === -1
+            ? ""
+            : remainingText.slice(toolCloseIndex + toolClosingTag.length)
+    }
 
-	return contentBlocks
+    return contentBlocks
 }

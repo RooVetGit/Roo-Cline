@@ -1,0 +1,79 @@
+name: Release
+run-name: Release ${{ github.event_name == 'push' && '- Create Changeset PR' || '- Approve & Merge Changeset PR' }}
+
+on:
+  push:
+    branches:
+      - main
+  pull_request_target:
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+env:
+  AWS_REGION: us-east-1
+
+jobs:
+  release:
+    name: Release
+    if: ${{ github.event_name == 'push' && github.actor != 'R00-B0T'}}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - id: install-aws-cli
+        uses: unfor19/install-aws-cli-action@v1
+        with:
+          version: 2
+          verbose: false
+          arch: amd64
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: NPM Install
+        run: |
+          npm run install:all
+          npm run build
+
+      - name: Changeset Pull Request
+        id: changesets
+        uses: changesets/action@v1
+        with:
+          commit: "changeset version bump"
+          title: "Changeset version bump"
+          version: npm run version-packages # This performs the changeset version bump
+          # publish: npm run publish # Revisit possible refactor along with npm-publish.yml
+        env:
+          GITHUB_TOKEN: ${{ secrets.CROSS_REPO_ACCESS_TOKEN }}
+
+  auto-approve-and-merge:
+    name: Auto approve and merge Bump version PRs
+    runs-on: ubuntu-latest
+    if: github.actor == 'R00-B0T' && contains(github.event.pull_request.title, 'Changeset version bump')
+    permissions:
+      pull-requests: write
+    
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.CROSS_REPO_ACCESS_TOKEN }}
+      - name: Auto approve PR
+        uses: hmarr/auto-approve-action@v4
+        with:
+          review-message: "I'm approving since it's a bump version PR"
+      - name: Enable automerge on PR
+        run: gh pr merge --squash --auto ${{ github.event.pull_request.number }}
+        env:
+          GH_TOKEN: ${{ secrets.CROSS_REPO_ACCESS_TOKEN }}

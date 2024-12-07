@@ -6,6 +6,7 @@ on:
 
 jobs:
   publish-extension:
+    if: ${{ github.actor == 'R00-B0T'}}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3

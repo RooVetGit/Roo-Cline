@@ -46,7 +46,7 @@ import { formatResponse } from "./prompts/responses"
 import { addCustomInstructions, SYSTEM_PROMPT } from "./prompts/system"
 import { truncateHalfConversation } from "./sliding-window"
 import { ClineProvider, GlobalFileNames } from "./webview/ClineProvider"
-import { showOmissionWarning } from "../integrations/editor/detect-omission"
+import { detectCodeOmission } from "../integrations/editor/detect-omission"
 import { BrowserSession } from "../services/browser/BrowserSession"
 
 const cwd =
@@ -1101,7 +1101,15 @@ export class Cline {
 								await this.diffViewProvider.update(newContent, true)
 								await delay(300) // wait for diff view to update
 								this.diffViewProvider.scrollToFirstDiff()
-								showOmissionWarning(this.diffViewProvider.originalContent || "", newContent)
+
+								// Check for code omissions before proceeding
+								if (detectCodeOmission(this.diffViewProvider.originalContent || "", newContent)) {
+									await this.diffViewProvider.revertChanges()
+									pushToolResult(formatResponse.toolError(
+										"Content appears to be truncated. Found comments indicating omitted code (e.g., '// rest of code unchanged', '/* previous code */'). Please provide the complete file content without any omissions."
+									))
+									break
+								}
 
 								const completeMessage = JSON.stringify({
 									...sharedMessageProps,

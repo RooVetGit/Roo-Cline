@@ -5,6 +5,10 @@ node_modules
 
 .DS_Store
 
-.npmrc
-
+# Builds
+bin
 roo-cline-*.vsix
+
+# Prompts
+prompts
+

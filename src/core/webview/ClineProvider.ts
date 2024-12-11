@@ -65,6 +65,8 @@ type GlobalStateKey =
 	| "allowedCommands"
 	| "soundEnabled"
 	| "diffEnabled"
+	| "isInteractiveMode"
+	| "browserPort"
 
 export const GlobalFileNames = {
 	apiConversationHistory: "api_conversation_history.json",
@@ -84,7 +86,7 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 
 	constructor(
 		readonly context: vscode.ExtensionContext,
-		private readonly outputChannel: vscode.OutputChannel,
+		readonly outputChannel: vscode.OutputChannel,
 	) {
 		this.outputChannel.appendLine("ClineProvider instantiated")
 		ClineProvider.activeInstances.add(this)
@@ -203,13 +205,17 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			apiConfiguration, 
 			customInstructions, 
 			diffEnabled,
+			isInteractiveMode,
+			browserPort,
 		} = await this.getState()
-		
+
 		this.cline = new Cline(
 			this, 
 			apiConfiguration, 
 			customInstructions, 
 			diffEnabled,
+			isInteractiveMode,
+			browserPort,
 			task, 
 			images
 		)
@@ -221,6 +227,8 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			apiConfiguration, 
 			customInstructions, 
 			diffEnabled,
+			isInteractiveMode,
+			browserPort,
 		} = await this.getState()
 		
 		this.cline = new Cline(
@@ -228,6 +236,8 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			apiConfiguration,
 			customInstructions,
 			diffEnabled,
+			isInteractiveMode,
+			browserPort,
 			undefined,
 			undefined,
 			historyItem,
@@ -547,6 +557,14 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 						await this.updateGlobalState("diffEnabled", diffEnabled)
 						await this.postStateToWebview()
 						break
+					case "isInteractiveMode":
+						await this.updateGlobalState("isInteractiveMode", message.bool ?? false)
+						await this.postStateToWebview()
+						break
+					case "browserPort":
+						await this.updateGlobalState("browserPort", message.text ?? "7333")
+						await this.postStateToWebview() 
+						break
 				}
 			},
 			null,
@@ -855,6 +873,8 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			soundEnabled,
 			diffEnabled,
 			taskHistory,
+			isInteractiveMode,
+			browserPort,
 		} = await this.getState()
 		
 		const allowedCommands = vscode.workspace
@@ -878,6 +898,8 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			diffEnabled: diffEnabled ?? false,
 			shouldShowAnnouncement: lastShownAnnouncementId !== this.latestAnnouncementId,
 			allowedCommands,
+			isInteractiveMode: isInteractiveMode ?? false,
+			browserPort: browserPort ?? "7333",
 		}
 	}
 
@@ -969,6 +991,8 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			allowedCommands,
 			soundEnabled,
 			diffEnabled,
+			isInteractiveMode,
+			browserPort,
 		] = await Promise.all([
 			this.getGlobalState("apiProvider") as Promise<ApiProvider | undefined>,
 			this.getGlobalState("apiModelId") as Promise<string | undefined>,
@@ -1005,6 +1029,8 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			this.getGlobalState("allowedCommands") as Promise<string[] | undefined>,
 			this.getGlobalState("soundEnabled") as Promise<boolean | undefined>,
 			this.getGlobalState("diffEnabled") as Promise<boolean | undefined>,
+			this.getGlobalState("isInteractiveMode") as Promise<boolean | undefined>,
+			this.getGlobalState("browserPort") as Promise<string | undefined>
 		])
 
 		let apiProvider: ApiProvider
@@ -1059,6 +1085,8 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			allowedCommands,
 			soundEnabled,
 			diffEnabled,
+			isInteractiveMode: isInteractiveMode ?? false,
+			browserPort: browserPort ?? "7333"
 		}
 	}
 

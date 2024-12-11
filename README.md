@@ -1,5 +1,4 @@
 # Roo-Cline
-
 A fork of Cline, an autonomous coding agent, with some added experimental configuration and automation features.
 - Auto-approval capabilities for commands, write, and browser operations
 - Support for .clinerules per-project custom instructions
@@ -15,10 +14,76 @@ Here's an example of Roo-Cline autonomously creating a snake game with "Always a
 
 https://github.com/user-attachments/assets/c2bb31dc-e9b2-4d73-885d-17f1471a4987
 
+### Installation
+If you want to install the latest extension from the Marketplace, just search for "Roo Cline" in your VSCode-compatible editor's Extensions panel (Cmd/Ctrl+Shift+X).
+
+
+### Testing Builds
+1. Install dependencies:
+   ```bash
+   npm run install:all
+   ```
+
+2. Build the VSIX file:
+   ```bash
+   npm run build
+   ```
+3. The new VSIX file will be created in the `bin/` directory
+4. Install the extension from the VSIX file as described below:
+
+   - **Option 1:** Drag and drop the `.vsix` file into your VSCode-compatible editor's Extensions panel (Cmd/Ctrl+Shift+X).
+
+   - **Option 2:** Install the plugin using the CLI, make sure you have your VSCode-compatible CLI installed and in your `PATH` variable. Cursor example: `export PATH="$PATH:/Applications/Cursor.app/Contents/MacOS"`
+
+    ```bash
+    # Ex: cursor --install-extension bin/roo-cline-2.0.1.vsix
+    # Ex: code --install-extension bin/roo-cline-2.0.1.vsix
+    ```
+
+### Publishing
+We use [changesets](https://github.com/changesets/changesets) for versioning and publishing this package. To make changes:
+
+1. Create a PR with your changes
+2. Create a new changeset by running `npm run changeset`
+   - Select the appropriate kind of change - `patch` for bug fixes, `minor` for new features, or `major` for breaking changes
+   - Write a clear description of your changes that will be included in the changelog
+3. Get the PR approved and pass all checks
+4. Merge it
+
+Once your merge is successful:
+- The release workflow will automatically create a new "Changeset version bump" PR
+- This PR will:
+  - Update the version based on your changeset
+  - Update the CHANGELOG.md file
+  - Create a git tag
+- The PR will be automatically approved and merged
+- A new version will be published
+
+### Browser Actions
+
+The browser action tool allows Cline to interact with web pages through a Puppeteer-controlled browser. This can be used in two modes:
+
+#### Interactive Mode
+- Triggered by adding the string `interactive mode` to your prompt, it also requires the string `(browserPort = 7333)`, where the port number can be modified.
+- Requires a browser instance running on the specified port, ex: `/Applications/Google\ Chrome\ Canary.app/Contents/MacOS/Google\ Chrome\ Canary --remote-debugging-port=7333`
+- Useful for debugging and development scenarios where you need to interact with a running browser
+
+#### Non-Interactive Mode
+- Default mode when no `interactive mode` string is present in your prompt
+- Launches a new browser instance for each session
+- Better suited for quick simple browser tasks, ex: testing a URL
+
+The browser action, in both modes, supports operations like:
+- Launching a browser at a specified URL
+- Clicking elements at specific coordinates
+- Typing text
+- Scrolling the page
+- Capturing screenshots and console logs
+- Closing the browser
+
+Each browser action provides feedback through screenshots and console logs, allowing for detailed interaction tracking and debugging.
 
 ---
-
-# Cline (prev. Claude Dev) – \#1 on OpenRouter
 
 <p align="center">
   <img src="https://media.githubusercontent.com/media/cline/cline/main/assets/docs/demo.gif" width="100%" />
@@ -45,7 +110,7 @@ https://github.com/user-attachments/assets/c2bb31dc-e9b2-4d73-885d-17f1471a4987
 
 Meet Cline, an AI assistant that can use your **CLI** a**N**d **E**ditor.
 
-Thanks to [Claude 3.5 Sonnet's agentic coding capabilities](https://www-cdn.anthropic.com/fed9cc193a14b84131812372d8d5857f8f304c52/Model_Card_Claude_3_Addendum.pdf), Cline can handle complex software development tasks step-by-step. With tools that let him create & edit files, explore large projects, use the browser, and execute terminal commands (after you grant permission), he can assist you in ways that go beyond code completion or tech support. While autonomous AI scripts traditionally run in sandboxed environments, this extension provides a human-in-the-loop GUI to approve every file change and terminal command, providing a safe and accessible way to explore the potential of agentic AI.
+Thanks to [Claude 3.5 Sonnet's agentic coding capabilities](https://www-cdn.anthropic.com/fed9cc193a14b84131812372d8d5857f8f304c52/Model_Card_Claude_3_Addendum.pdf), Cline can handle complex software development tasks step-by-step. With tools that let him create & edit files, explore large projects, use the browser, and execute terminal commands (after you grant permission), he can assist you in ways that go beyond code completion or tech support. While autonomous AI scripts traditionally run in sandboxed environments, this extension provides a human-in-the-loop GUI to approve every file change and terminal command, providing a safe and accessible way to explore the potential of agentic AI.
 
 1. Enter your task and add images to convert mockups into functional apps or fix bugs with screenshots.
 2. Cline starts by analyzing your file structure & source code ASTs, running regex searches, and reading relevant files to get up to speed in existing projects. By carefully managing what information is added to context, Cline can provide valuable assistance even for large, complex projects without overwhelming the context window.
@@ -53,10 +118,10 @@ Thanks to [Claude 3.5 Sonnet's agentic coding capabilities](https://www-cdn.ant
     - Create and edit files + monitor linter/compiler errors along the way, letting him proactively fix issues like missing imports and syntax errors on his own.
     - Execute commands directly in your terminal and monitor their output as he works, letting him e.g., react to dev server issues after editing a file.
     - For web development tasks, Cline can launch the site in a headless browser, click, type, scroll, and capture screenshots + console logs, allowing him to fix runtime errors and visual bugs.
-4. When a task is completed, Cline will present the result to you with a terminal command like `open -a "Google Chrome" index.html`, which you run with a click of a button.
+4. When a task is completed, Cline will present the result to you with a terminal command like `open -a "Google Chrome" index.html`, which you run with a click of a button.
 
 > [!TIP]
-> Use the `CMD/CTRL + Shift + P` shortcut to open the command palette and type "Cline: Open In New Tab" to open the extension as a tab in your editor. This lets you use Cline side-by-side with your file explorer, and see how he changes your workspace more clearly.
+> Use the `CMD/CTRL + Shift + P` shortcut to open the command palette and type "Cline: Open In New Tab" to open the extension as a tab in your editor. This lets you use Cline side-by-side with your file explorer, and see how he changes your workspace more clearly.
 
 ---
 
@@ -78,7 +143,7 @@ The extension also keeps track of total tokens and API usage cost for the entire
 
 Thanks to the new [shell integration updates in VSCode v1.93](https://code.visualstudio.com/updates/v1_93#_terminal-shell-integration-api), Cline can execute commands directly in your terminal and receive the output. This allows him to perform a wide range of tasks, from installing packages and running build scripts to deploying applications, managing databases, and executing tests, all while adapting to your dev environment & toolchain to get the job done right.
 
-For long running processes like dev servers, use the "Proceed While Running" button to let Cline continue in the task while the command runs in the background. As Cline works he’ll be notified of any new terminal output along the way, letting him react to issues that may come up, such as compile-time errors when editing files.
+For long running processes like dev servers, use the "Proceed While Running" button to let Cline continue in the task while the command runs in the background. As Cline works he'll be notified of any new terminal output along the way, letting him react to issues that may come up, such as compile-time errors when editing files.
 
 <!-- Transparent pixel to create line break after floating image -->
 
@@ -112,10 +177,10 @@ Try asking Cline to "test the app", and watch as he runs a command like `npm run
 
 ### Add Context
 
--   **`@url`:** Paste in a URL for the extension to fetch and convert to markdown, useful when you want to give Cline the latest docs
--   **`@problems`:** Add workspace errors and warnings ('Problems' panel) for Cline to fix
--   **`@file`:** Adds a file's contents so you don't have to waste API requests approving read file (+ type to search files)
--   **`@folder`:** Adds folder's files all at once to speed up your workflow even more
+-   **`@url`:** Paste in a URL for the extension to fetch and convert to markdown, useful when you want to give Cline the latest docs
+-   **`@problems`:** Add workspace errors and warnings ('Problems' panel) for Cline to fix
+-   **`@file`:** Adds a file's contents so you don't have to waste API requests approving read file (+ type to search files)
+-   **`@folder`:** Adds folder's files all at once to speed up your workflow even more
 
 ## Contributing
 

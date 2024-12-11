@@ -27,6 +27,8 @@ export interface ExtensionStateContextType extends ExtensionState {
 	setAllowedCommands: (value: string[]) => void
 	setSoundEnabled: (value: boolean) => void
 	setDiffEnabled: (value: boolean) => void
+	setInteractiveBrowserMode: (value: boolean) => void
+	setBrowserPort: (value: string) => void
 }
 
 const ExtensionStateContext = createContext<ExtensionStateContextType | undefined>(undefined)
@@ -40,6 +42,8 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		allowedCommands: [],
 		soundEnabled: false,
 		diffEnabled: false,
+		isInteractiveMode: false,
+		browserPort: "7333",
 	})
 	const [didHydrateState, setDidHydrateState] = useState(false)
 	const [showWelcome, setShowWelcome] = useState(false)
@@ -130,6 +134,8 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		setAllowedCommands: (value) => setState((prevState) => ({ ...prevState, allowedCommands: value })),
 		setSoundEnabled: (value) => setState((prevState) => ({ ...prevState, soundEnabled: value })),
 		setDiffEnabled: (value) => setState((prevState) => ({ ...prevState, diffEnabled: value })),
+		setInteractiveBrowserMode: (value) => setState((prevState) => ({ ...prevState, isInteractiveMode: value })),
+		setBrowserPort: (value) => setState((prevState) => ({ ...prevState, browserPort: value })),
 	}
 
 	return <ExtensionStateContext.Provider value={contextValue}>{children}</ExtensionStateContext.Provider>

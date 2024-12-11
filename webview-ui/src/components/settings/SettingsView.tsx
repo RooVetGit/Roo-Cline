@@ -32,6 +32,10 @@ const SettingsView = ({ onDone }: SettingsViewProps) => {
 		openRouterModels,
 		setAllowedCommands,
 		allowedCommands,
+		isInteractiveMode,
+		setInteractiveBrowserMode,
+		browserPort,
+		setBrowserPort,
 	} = useExtensionState()
 	const [apiErrorMessage, setApiErrorMessage] = useState<string | undefined>(undefined)
 	const [modelIdErrorMessage, setModelIdErrorMessage] = useState<string | undefined>(undefined)
@@ -53,6 +57,8 @@ const SettingsView = ({ onDone }: SettingsViewProps) => {
 			vscode.postMessage({ type: "allowedCommands", commands: allowedCommands ?? [] })
 			vscode.postMessage({ type: "soundEnabled", bool: soundEnabled })
 			vscode.postMessage({ type: "diffEnabled", bool: diffEnabled })
+			vscode.postMessage({ type: "isInteractiveMode", bool: isInteractiveMode })
+			vscode.postMessage({ type: "browserPort", text: browserPort })
 			onDone()
 		}
 	}
@@ -321,6 +327,45 @@ const SettingsView = ({ onDone }: SettingsViewProps) => {
 							When enabled, Cline will play sound effects for notifications and events.
 						</p>
 					</div>
+				</div>
+
+				<div style={{ marginBottom: 5 }}>
+					<h4 style={{ fontWeight: 500, marginBottom: 10 }}>Browser Settings</h4>
+
+					<div style={{ marginBottom: 5 }}>
+						<VSCodeCheckbox 
+						checked={isInteractiveMode} 
+						onChange={(e: any) => setInteractiveBrowserMode(e.target.checked)}
+						>
+						<span style={{ fontWeight: "500" }}>Interactive Browser Mode</span>
+						</VSCodeCheckbox>
+						<p style={{
+						fontSize: "12px",
+						marginTop: "5px",
+						color: "var(--vscode-descriptionForeground)",
+						}}>
+						When enabled, connects to an existing Chrome instance instead of launching a new browser.
+						</p>
+					</div>
+
+					{isInteractiveMode && (
+						<div style={{ marginBottom: 5 }}>
+						<VSCodeTextField
+							value={browserPort}
+							onInput={(e: any) => setBrowserPort(e.target.value)}
+							placeholder="Browser debugging port (default: 7333)"
+						>
+							<span style={{ fontWeight: "500" }}>Browser Port</span>
+						</VSCodeTextField>
+						<p style={{
+							fontSize: "12px",
+							marginTop: "5px",
+							color: "var(--vscode-descriptionForeground)", 
+						}}>
+							Port number for Chrome's remote debugging. Launch Chrome with --remote-debugging-port=PORT
+						</p>
+						</div>
+					)}
 				</div>
 
 				{IS_DEV && (

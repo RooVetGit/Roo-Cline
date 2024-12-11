@@ -32,6 +32,8 @@ export interface WebviewMessage {
 		| "playSound"
 		| "soundEnabled"
 		| "diffEnabled"
+		| "isInteractiveMode"
+    	| "browserPort"
 	text?: string
 	askResponse?: ClineAskResponse
 	apiConfiguration?: ApiConfiguration

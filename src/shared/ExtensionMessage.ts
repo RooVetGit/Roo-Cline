@@ -43,6 +43,8 @@ export interface ExtensionState {
 	allowedCommands?: string[]
 	soundEnabled?: boolean
 	diffEnabled?: boolean
+	isInteractiveMode?: boolean
+	browserPort?: string
 }
 
 export interface ClineMessage {
@@ -99,6 +101,8 @@ export interface ClineSayTool {
 	content?: string
 	regex?: string
 	filePattern?: string
+	isInteractiveMode?: boolean
+	browserPort?: string
 }
 
 // must keep in sync with system prompt

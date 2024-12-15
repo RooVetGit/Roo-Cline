@@ -13,6 +13,7 @@ A fork of Cline, an autonomous coding agent, optimized for speed and flexibility
 - Support for dragging and dropping images into chats
 - Support for auto-approving MCP tools
 - Support for enabling/disabling MCP servers
+- Exponential backoff and retry on errors from providers
 
 ## Disclaimer
 

@@ -1,5 +1,9 @@
 # Roo Cline Changelog
 
+## [2.2.8]
+
+-   Exponential backoff and retry on errors from providers
+
 ## [2.2.7]
 
 -   More fixes to search/replace diffs

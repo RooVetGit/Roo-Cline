@@ -3,7 +3,8 @@ import { GoogleGenerativeAI } from "@google/generative-ai"
 import { ApiHandler } from "../"
 import { ApiHandlerOptions, geminiDefaultModelId, GeminiModelId, geminiModels, ModelInfo } from "../../shared/api"
 import { convertAnthropicMessageToGemini } from "../transform/gemini-format"
-import { ApiStream } from "../transform/stream"
+import { ApiStream, ApiStreamChunk } from "../transform/stream"
+import { withRetry } from "../utils/retry"
 
 export class GeminiHandler implements ApiHandler {
 	private options: ApiHandlerOptions
@@ -18,30 +19,48 @@ export class GeminiHandler implements ApiHandler {
 	}
 
 	async *createMessage(systemPrompt: string, messages: Anthropic.Messages.MessageParam[]): ApiStream {
+		const self = this;
 		const model = this.client.getGenerativeModel({
 			model: this.getModel().id,
 			systemInstruction: systemPrompt,
 		})
-		const result = await model.generateContentStream({
-			contents: messages.map(convertAnthropicMessageToGemini),
-			generationConfig: {
-				// maxOutputTokens: this.getModel().info.maxTokens,
-				temperature: 0,
-			},
-		})
 
-		for await (const chunk of result.stream) {
-			yield {
-				type: "text",
-				text: chunk.text(),
+		const gen = withRetry(async () => {
+			const result = await model.generateContentStream({
+				contents: messages.map(convertAnthropicMessageToGemini),
+				generationConfig: {
+					// maxOutputTokens: this.getModel().info.maxTokens,
+					temperature: 0,
+				},
+			})
+
+			return (async function*() {
+				for await (const chunk of result.stream) {
+					yield {
+						type: "text",
+						text: chunk.text(),
+					} as ApiStreamChunk;
+				}
+
+				const response = await result.response
+				yield {
+					type: "usage",
+					inputTokens: response.usageMetadata?.promptTokenCount ?? 0,
+					outputTokens: response.usageMetadata?.candidatesTokenCount ?? 0,
+				} as ApiStreamChunk;
+			})();
+		}, {
+			maxRetries: 10,
+			initialDelayMs: 2000,
+			onRetry: (error, attempt, delayMs) => {
+				console.log(`Gemini request failed (attempt ${attempt})`);
+				console.log(`Error:`, error);
+				console.log(`Retrying in ${delayMs}ms...`);
 			}
-		}
+		});
 
-		const response = await result.response
-		yield {
-			type: "usage",
-			inputTokens: response.usageMetadata?.promptTokenCount ?? 0,
-			outputTokens: response.usageMetadata?.candidatesTokenCount ?? 0,
+		for await (const chunk of gen) {
+			yield chunk;
 		}
 	}
 

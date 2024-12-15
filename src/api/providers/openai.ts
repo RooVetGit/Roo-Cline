@@ -8,7 +8,8 @@ import {
 } from "../../shared/api"
 import { ApiHandler } from "../index"
 import { convertToOpenAiMessages } from "../transform/openai-format"
-import { ApiStream } from "../transform/stream"
+import { ApiStream, ApiStreamChunk } from "../transform/stream"
+import { withRetry } from "../utils/retry"
 
 export class OpenAiHandler implements ApiHandler {
 	private options: ApiHandlerOptions
@@ -49,22 +50,41 @@ export class OpenAiHandler implements ApiHandler {
 			requestOptions.stream_options = { include_usage: true }
 		}
 
-		const stream = await this.client.chat.completions.create(requestOptions)
-		for await (const chunk of stream) {
-			const delta = chunk.choices[0]?.delta
-			if (delta?.content) {
-				yield {
-					type: "text",
-					text: delta.content,
+		const self = this;
+
+		const gen = withRetry(async () => {
+			const stream = await self.client.chat.completions.create(requestOptions);
+
+			return (async function*() {
+				for await (const chunk of stream) {
+					const delta = chunk.choices[0]?.delta
+					if (delta?.content) {
+						yield {
+							type: "text",
+							text: delta.content,
+						} as ApiStreamChunk;
+					}
+					if (chunk.usage) {
+						yield {
+							type: "usage",
+							inputTokens: chunk.usage.prompt_tokens || 0,
+							outputTokens: chunk.usage.completion_tokens || 0,
+						} as ApiStreamChunk;
+					}
 				}
+			})();
+		}, {
+			maxRetries: 10,
+			initialDelayMs: 2000,
+			onRetry: (error, attempt, delayMs) => {
+				console.log(`OpenAI request failed (attempt ${attempt})`);
+				console.log(`Error:`, error);
+				console.log(`Retrying in ${delayMs}ms...`);
 			}
-			if (chunk.usage) {
-				yield {
-					type: "usage",
-					inputTokens: chunk.usage.prompt_tokens || 0,
-					outputTokens: chunk.usage.completion_tokens || 0,
-				}
-			}
+		});
+
+		for await (const chunk of gen) {
+			yield chunk;
 		}
 	}
 

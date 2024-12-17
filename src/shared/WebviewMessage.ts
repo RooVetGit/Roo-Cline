@@ -34,6 +34,8 @@ export interface WebviewMessage {
 		| "soundEnabled"
 		| "soundVolume"
 		| "diffEnabled"
+		| "isInteractiveMode"
+    	| "browserPort"
 		| "debugDiffEnabled"
 		| "openMcpSettings"
 		| "restartMcpServer"

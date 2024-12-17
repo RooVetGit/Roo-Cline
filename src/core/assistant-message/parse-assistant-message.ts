@@ -8,6 +8,7 @@ import {
 	ToolUseName,
 } from "."
 
+// In case of debugging, you may pass 'provider: ClineProvider' as a second argument, and use 'providerRef.deref()?.outputChannel.appendLine'
 export function parseAssistantMessage(assistantMessage: string) {
 	let contentBlocks: AssistantMessageContent[] = []
 	let currentTextContent: TextContent | undefined = undefined

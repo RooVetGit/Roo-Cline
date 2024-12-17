@@ -68,6 +68,8 @@ type GlobalStateKey =
 	| "soundEnabled"
 	| "soundVolume"
 	| "diffEnabled"
+	| "isInteractiveMode"
+	| "browserPort"
 	| "debugDiffEnabled"
 	| "alwaysAllowMcp"
 
@@ -91,7 +93,7 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 
 	constructor(
 		readonly context: vscode.ExtensionContext,
-		private readonly outputChannel: vscode.OutputChannel,
+		readonly outputChannel: vscode.OutputChannel,
 	) {
 		this.outputChannel.appendLine("ClineProvider instantiated")
 		ClineProvider.activeInstances.add(this)
@@ -214,31 +216,37 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 
 	async initClineWithTask(task?: string, images?: string[]) {
 		await this.clearTask()
-		const {
-			apiConfiguration,
-			customInstructions,
+		const { 
+			apiConfiguration, 
+			customInstructions, 
 			diffEnabled,
+			isInteractiveMode,
+			browserPort,
 			debugDiffEnabled,
 		} = await this.getState()
-		
+
 		this.cline = new Cline(
-			this,
-			apiConfiguration,
-			customInstructions,
+			this, 
+			apiConfiguration, 
+			customInstructions, 
 			diffEnabled,
 			debugDiffEnabled,
-			task,
+			isInteractiveMode,
+			browserPort,
+			task, 
 			images
 		)
 	}
 
 	async initClineWithHistoryItem(historyItem: HistoryItem) {
 		await this.clearTask()
-		const {
-			apiConfiguration,
-			customInstructions,
+		const { 
+			apiConfiguration, 
+			customInstructions, 
 			diffEnabled,
 			debugDiffEnabled,
+			isInteractiveMode,
+			browserPort
 		} = await this.getState()
 		
 		this.cline = new Cline(
@@ -247,6 +255,8 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			customInstructions,
 			diffEnabled,
 			debugDiffEnabled,
+			isInteractiveMode,
+			browserPort,
 			undefined,
 			undefined,
 			historyItem,
@@ -614,6 +624,14 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 						await this.updateGlobalState("diffEnabled", diffEnabled)
 						await this.postStateToWebview()
 						break
+					case "isInteractiveMode":
+						await this.updateGlobalState("isInteractiveMode", message.bool ?? false)
+						await this.postStateToWebview()
+						break
+					case "browserPort":
+						await this.updateGlobalState("browserPort", message.text ?? "7333")
+						await this.postStateToWebview() 
+						break
 					case "debugDiffEnabled":
 						const debugDiffEnabled = message.bool ?? false
 						await this.updateGlobalState("debugDiffEnabled", debugDiffEnabled)
@@ -947,6 +965,8 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			diffEnabled,
 			debugDiffEnabled,
 			taskHistory,
+			isInteractiveMode,
+			browserPort,
 			soundVolume,
 		} = await this.getState()
 		
@@ -973,6 +993,8 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			debugDiffEnabled: debugDiffEnabled ?? false,
 			shouldShowAnnouncement: lastShownAnnouncementId !== this.latestAnnouncementId,
 			allowedCommands,
+			isInteractiveMode: isInteractiveMode ?? false,
+			browserPort: browserPort ?? "7333",
 			soundVolume: soundVolume ?? 0.5,
 		}
 	}
@@ -1066,6 +1088,8 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			allowedCommands,
 			soundEnabled,
 			diffEnabled,
+			isInteractiveMode,
+			browserPort,
 			debugDiffEnabled,
 			soundVolume,
 		] = await Promise.all([
@@ -1105,6 +1129,8 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			this.getGlobalState("allowedCommands") as Promise<string[] | undefined>,
 			this.getGlobalState("soundEnabled") as Promise<boolean | undefined>,
 			this.getGlobalState("diffEnabled") as Promise<boolean | undefined>,
+			this.getGlobalState("isInteractiveMode") as Promise<boolean | undefined>,
+			this.getGlobalState("browserPort") as Promise<string | undefined>,
 			this.getGlobalState("debugDiffEnabled") as Promise<boolean | undefined>,
 			this.getGlobalState("soundVolume") as Promise<number | undefined>,
 		])
@@ -1160,6 +1186,8 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			alwaysAllowMcp: alwaysAllowMcp ?? false,
 			taskHistory,
 			allowedCommands,
+			isInteractiveMode: isInteractiveMode ?? false,
+			browserPort: browserPort ?? "7333",
 			soundEnabled: soundEnabled ?? false,
 			diffEnabled: diffEnabled ?? false,
 			debugDiffEnabled: debugDiffEnabled ?? false,

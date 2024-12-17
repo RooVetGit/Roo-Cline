@@ -65,6 +65,8 @@ export class Cline {
 	private urlContentFetcher: UrlContentFetcher
 	private browserSession: BrowserSession
 	private didEditFile: boolean = false
+	private isInteractiveMode: boolean = false
+	private browserPort: string = '7333'
 	customInstructions?: string
 	diffStrategy?: DiffStrategy
 
@@ -98,6 +100,8 @@ export class Cline {
 		customInstructions?: string,
 		diffEnabled?: boolean,
 		debugDiffEnabled?: boolean,
+		isInteractiveMode?: boolean,
+		browserPort?: string,
 		task?: string,
 		images?: string[],
 		historyItem?: HistoryItem,
@@ -106,8 +110,10 @@ export class Cline {
 		this.api = buildApiHandler(apiConfiguration)
 		this.terminalManager = new TerminalManager()
 		this.urlContentFetcher = new UrlContentFetcher(provider.context)
-		this.browserSession = new BrowserSession(provider.context)
+		this.browserSession = new BrowserSession(provider.context, provider)
 		this.diffViewProvider = new DiffViewProvider(cwd)
+		this.isInteractiveMode = isInteractiveMode ?? false
+		this.browserPort = browserPort ?? "7333"
 		this.customInstructions = customInstructions
 		if (diffEnabled && this.api.getModel().id) {
 			this.diffStrategy = getDiffStrategy(this.api.getModel().id, debugDiffEnabled)
@@ -633,22 +639,42 @@ export class Cline {
 		if (responseImages && responseImages.length > 0) {
 			newUserContent.push(...formatResponse.imageBlocks(responseImages))
 		}
-
+		const state = await this.providerRef.deref()?.getState()
+		const wasInteractiveBrowser = state?.isInteractiveMode
+		let hadBrowserPort = '';
+		if ( wasInteractiveBrowser ) {
+			hadBrowserPort = state?.browserPort;
+			this.providerRef.deref()?.outputChannel.appendLine(`resumeTaskFromHistory :: browserPort :: ${hadBrowserPort}`)
+		}
 		await this.overwriteApiConversationHistory(modifiedApiConversationHistory)
-		await this.initiateTaskLoop(newUserContent)
+		await this.initiateTaskLoop(newUserContent, wasInteractiveBrowser, hadBrowserPort)
 	}
 
-	private async initiateTaskLoop(userContent: UserContent): Promise<void> {
-		let nextUserContent = userContent
-		let includeFileDetails = true
+	private async initiateTaskLoop(userContent: UserContent, wasInteractiveBrowser: boolean = false, hadBrowserPort: string = ''): Promise<void> {
+		const state = await this.providerRef.deref()?.getState()
+		const hasInteractiveMode = state?.isInteractiveMode ?? wasInteractiveBrowser
+
+
+		this.providerRef.deref()?.outputChannel.appendLine(`initiateTaskLoop :: hasInteractiveMode :: ${hasInteractiveMode}`)
+		
+		// Set interactive mode flag if found in text
+		if (hasInteractiveMode) {
+			this.isInteractiveMode = true;
+			this.browserPort = state?.browserPort ?? hadBrowserPort
+			this.providerRef.deref()?.outputChannel.appendLine(`initiateTaskLoop :: browserPort :: ${this.browserPort}`)
+		}
+	
+		let nextUserContent = userContent;
+		let includeFileDetails = true;
 		while (!this.abort) {
-			const didEndLoop = await this.recursivelyMakeClineRequests(nextUserContent, includeFileDetails)
-			includeFileDetails = false // we only need file details the first time
-
-			//  The way this agentic loop works is that cline will be given a task that he then calls tools to complete. unless there's an attempt_completion call, we keep responding back to him with his tool's responses until he either attempt_completion or does not use anymore tools. If he does not use anymore tools, we ask him to consider if he's completed the task and then call attempt_completion, otherwise proceed with completing the task.
-			// There is a MAX_REQUESTS_PER_TASK limit to prevent infinite requests, but Cline is prompted to finish the task as efficiently as he can.
-
-			//const totalCost = this.calculateApiCost(totalInputTokens, totalOutputTokens)
+			const didEndLoop = await this.recursivelyMakeClineRequests(
+				nextUserContent, 
+				includeFileDetails,
+				this.isInteractiveMode, // Pass the flag to recursivelyMakeClineRequests
+				this.browserPort // Pass the browserPort to recursivelyMakeClineRequests
+			)
+			includeFileDetails = false
+	
 			if (didEndLoop) {
 				// For now a task never 'completes'. This will only happen if the user hits max requests and denies resetting the count.
 				//this.say("task_completed", `Task completed. Total API usage cost: ${totalCost}`)
@@ -662,7 +688,7 @@ export class Cline {
 					{
 						type: "text",
 						text: formatResponse.noToolsUsed(),
-					},
+					}
 				]
 				this.consecutiveMistakeCount++
 			}
@@ -1498,7 +1524,15 @@ export class Cline {
 
 						try {
 							if (block.partial) {
-								if (action === "launch") {
+								if (action === "snapshot") {
+									// For snapshot, we just show the streaming UI update
+									await this.say(
+									  "browser_action",
+									  JSON.stringify({
+										action: "snapshot"
+									  } satisfies ClineSayBrowserAction),
+									)
+								} else if (action === "launch") {
 									await this.ask(
 										"browser_action_launch",
 										removeClosingTag("url", url),
@@ -1519,27 +1553,32 @@ export class Cline {
 								break
 							} else {
 								let browserActionResult: BrowserActionResult
-								if (action === "launch") {
+								if (action === "snapshot") {
+									await this.say("browser_action",JSON.stringify({action: "snapshot"} satisfies ClineSayBrowserAction))
+									browserActionResult = await this.browserSession.takeScreenshot(this.isInteractiveMode, this.browserPort)
+								} else if (action === "launch") {
 									if (!url) {
-										this.consecutiveMistakeCount++
-										pushToolResult(
-											await this.sayAndCreateMissingParamError("browser_action", "url"),
-										)
-										await this.browserSession.closeBrowser()
-										break
-									}
-									this.consecutiveMistakeCount = 0
-									const didApprove = await askApproval("browser_action_launch", url)
-									if (!didApprove) {
-										break
-									}
+										if (this.isInteractiveMode) {
+											browserActionResult = await this.browserSession.takeScreenshot()
+										} else {
+											this.consecutiveMistakeCount++
+											pushToolResult(await this.sayAndCreateMissingParamError("browser_action", "url"))
+											await this.browserSession.closeBrowser()
+											break
+										}
+									} else {
+										this.consecutiveMistakeCount = 0
+										const didApprove = await askApproval("browser_action_launch", url)
+										if (!didApprove) {
+											break
+										}
 
-									// NOTE: it's okay that we call this message since the partial inspect_site is finished streaming. The only scenario we have to avoid is sending messages WHILE a partial message exists at the end of the messages array. For example the api_req_finished message would interfere with the partial message, so we needed to remove that.
-									// await this.say("inspect_site_result", "") // no result, starts the loading spinner waiting for result
-									await this.say("browser_action_result", "") // starts loading spinner
-
-									await this.browserSession.launchBrowser()
-									browserActionResult = await this.browserSession.navigateToUrl(url)
+										// NOTE: it's okay that we call this message since the partial inspect_site is finished streaming. The only scenario we have to avoid is sending messages WHILE a partial message exists at the end of the messages array. For example the api_req_finished message would interfere with the partial message, so we needed to remove that.
+										// await this.say("inspect_site_result", "") // no result, starts the loading spinner waiting for result
+										await this.say("browser_action_result", "") // starts loading spinner
+										await this.browserSession.launchBrowser(this.isInteractiveMode, this.browserPort)
+										browserActionResult = await this.browserSession.navigateToUrl(url)
+									}
 								} else {
 									if (action === "click") {
 										if (!coordinate) {
@@ -1593,8 +1632,20 @@ export class Cline {
 											break
 									}
 								}
-
 								switch (action) {
+									case "snapshot": {
+										const { screenshot, ...snapshotResult } = browserActionResult
+										await this.say("browser_action_result", JSON.stringify(snapshotResult))
+										pushToolResult(
+											formatResponse.toolResult(
+												`The browser action has been executed. The console logs have been captured for your analysis.\n\nConsole logs:\n${
+													browserActionResult.logs || "(No new logs)"
+												}\n\n(REMEMBER: if you need to proceed to using non-\`browser_action\` tools or launch a new browser, you MUST first close this browser. For example, if after analyzing the logs and screenshot you need to edit a file, you must first close the browser before you can use the write_to_file tool.)`,
+												browserActionResult.screenshot ? [browserActionResult.screenshot] : [],
+											),
+										)
+										break
+									}	
 									case "launch":
 									case "click":
 									case "type":
@@ -1915,15 +1966,13 @@ export class Cline {
 									break
 								}
 								this.consecutiveMistakeCount = 0
-
+					
 								let commandResult: ToolResponse | undefined
 								if (command) {
 									if (lastMessage && lastMessage.ask !== "command") {
-										// havent sent a command message yet so first send completion_result then command
 										await this.say("completion_result", result, undefined, false)
 									}
-
-									// complete command message
+					
 									const didApprove = await askApproval("command", command)
 									if (!didApprove) {
 										break
@@ -1934,20 +1983,18 @@ export class Cline {
 										pushToolResult(execCommandResult)
 										break
 									}
-									// user didn't reject, but the command may have output
 									commandResult = execCommandResult
 								} else {
 									await this.say("completion_result", result, undefined, false)
 								}
-
-								// we already sent completion_result says, an empty string asks relinquishes control over button and field
+					
 								const { response, text, images } = await this.ask("completion_result", "", false)
 								if (response === "yesButtonClicked") {
 									pushToolResult("") // signals to recursive loop to stop (for now this never happens since yesButtonClicked will trigger a new task)
 									break
 								}
 								await this.say("user_feedback", text ?? "", images)
-
+					
 								const toolResults: (Anthropic.TextBlockParam | Anthropic.ImageBlockParam)[] = []
 								if (commandResult) {
 									if (typeof commandResult === "string") {
@@ -1966,7 +2013,7 @@ export class Cline {
 									text: `${toolDescription()} Result:`,
 								})
 								this.userMessageContent.push(...toolResults)
-
+					
 								break
 							}
 						} catch (error) {
@@ -2012,10 +2059,28 @@ export class Cline {
 	async recursivelyMakeClineRequests(
 		userContent: UserContent,
 		includeFileDetails: boolean = false,
+		isInteractiveMode: boolean = false,
+		browserPort?: string
 	): Promise<boolean> {
+		if (this.presentAssistantMessageHasPendingUpdates) {
+			this.presentAssistantMessage()
+		}
+		
+		const state = await this.providerRef.deref()?.getState()
+		// Use optional chaining and provide defaults
+		this.isInteractiveMode = isInteractiveMode ?? state?.isInteractiveMode ?? false
+		this.browserPort = browserPort ?? state?.browserPort ?? "7333"
+
+		// Store interactive mode state
+		if (state?.isInteractiveMode !== undefined) {
+			this.isInteractiveMode = state.isInteractiveMode
+		}
+
 		if (this.abort) {
 			throw new Error("Cline instance aborted")
 		}
+		// Store interactive mode state
+		this.isInteractiveMode = isInteractiveMode;
 
 		if (this.consecutiveMistakeCount >= 3) {
 			const { response, text, images } = await this.ask(
@@ -2265,7 +2330,7 @@ export class Cline {
 					this.consecutiveMistakeCount++
 				}
 
-				const recDidEndLoop = await this.recursivelyMakeClineRequests(this.userMessageContent)
+				const recDidEndLoop = await this.recursivelyMakeClineRequests(this.userMessageContent, false, this.isInteractiveMode, browserPort)
 				didEndLoop = recDidEndLoop
 			} else {
 				// if there's no assistant_responses, that means we got no text or tool_use content blocks from API which we should assume is an error

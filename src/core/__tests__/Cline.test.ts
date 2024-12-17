@@ -278,8 +278,10 @@ describe('Cline', () => {
                 mockProvider,
                 mockApiConfig,
                 'custom instructions',
-                false, // diffEnabled
-                false, // debugDiffEnabled
+                false,
+                false,
+                true, // isInteractiveMode
+                '7333', // browserPort
                 'test task'
             );
 

@@ -31,6 +31,8 @@ export interface ExtensionStateContextType extends ExtensionState {
 	setSoundEnabled: (value: boolean) => void
 	setSoundVolume: (value: number) => void
 	setDiffEnabled: (value: boolean) => void
+	setInteractiveBrowserMode: (value: boolean) => void
+	setBrowserPort: (value: string) => void
 	setDebugDiffEnabled: (value: boolean) => void
 }
 
@@ -46,6 +48,8 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		soundEnabled: false,
 		soundVolume: 0.5,
 		diffEnabled: false,
+		isInteractiveMode: false,
+		browserPort: "7333",
 		debugDiffEnabled: false,
 	})
 	const [didHydrateState, setDidHydrateState] = useState(false)
@@ -149,6 +153,8 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		setSoundEnabled: (value) => setState((prevState) => ({ ...prevState, soundEnabled: value })),
 		setSoundVolume: (value) => setState((prevState) => ({ ...prevState, soundVolume: value })),
 		setDiffEnabled: (value) => setState((prevState) => ({ ...prevState, diffEnabled: value })),
+		setInteractiveBrowserMode: (value) => setState((prevState) => ({ ...prevState, isInteractiveMode: value })),
+		setBrowserPort: (value) => setState((prevState) => ({ ...prevState, browserPort: value })),
 		setDebugDiffEnabled: (value) => setState((prevState) => ({
 			...prevState,
 			debugDiffEnabled: value

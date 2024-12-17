@@ -53,6 +53,8 @@ export interface ExtensionState {
 	soundEnabled?: boolean
 	soundVolume?: number
 	diffEnabled?: boolean
+	isInteractiveMode?: boolean
+	browserPort?: string
 	debugDiffEnabled?: boolean
 }
 
@@ -113,10 +115,12 @@ export interface ClineSayTool {
 	content?: string
 	regex?: string
 	filePattern?: string
+	isInteractiveMode?: boolean
+	browserPort?: string
 }
 
 // must keep in sync with system prompt
-export const browserActions = ["launch", "click", "type", "scroll_down", "scroll_up", "close"] as const
+export const browserActions = ["launch", "click", "type", "scroll_down", "scroll_up", "close", "snapshot"] as const
 export type BrowserAction = (typeof browserActions)[number]
 
 export interface ClineSayBrowserAction {

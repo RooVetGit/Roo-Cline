@@ -1,1 +1,72 @@
-- Before attempting completion, always make sure that any code changes have test coverage and that the tests pass.
+# Code Quality Rules
+
+1. Test Coverage:
+   - Before attempting completion, always make sure that any code changes have test coverage
+   - Ensure all tests pass before submitting changes
+
+2. Git Commits:
+   - When finishing a task, always output a git commit command
+   - Include a descriptive commit message that follows conventional commit format
+
+# Adding a New Settings Checkbox
+
+To add a new settings checkbox that persists its state, follow these steps:
+
+1. Add the message type to WebviewMessage.ts:
+   - Add the setting name to the WebviewMessage type's type union
+   - Example: `| "multisearchDiffEnabled"`
+
+2. Add the setting to ExtensionStateContext.tsx:
+   - Add the setting to the ExtensionStateContextType interface
+   - Add the setter function to the interface
+   - Add the setting to the initial state in useState
+   - Add the setting to the contextValue object
+   - Example:
+     ```typescript
+     interface ExtensionStateContextType {
+       multisearchDiffEnabled: boolean;
+       setMultisearchDiffEnabled: (value: boolean) => void;
+     }
+     ```
+
+3. Add the setting to ClineProvider.ts:
+   - Add the setting name to the GlobalStateKey type union
+   - Add the setting to the Promise.all array in getState
+   - Add the setting to the return value in getState with a default value
+   - Add the setting to the destructured variables in getStateToPostToWebview
+   - Add the setting to the return value in getStateToPostToWebview
+   - Add a case in setWebviewMessageListener to handle the setting's message type
+   - Example:
+     ```typescript
+     case "multisearchDiffEnabled":
+       await this.updateGlobalState("multisearchDiffEnabled", message.bool)
+       await this.postStateToWebview()
+       break
+     ```
+
+4. Add the checkbox UI to SettingsView.tsx:
+   - Import the setting and its setter from ExtensionStateContext
+   - Add the VSCodeCheckbox component with the setting's state and onChange handler
+   - Add appropriate labels and description text
+   - Example:
+     ```typescript
+     <VSCodeCheckbox 
+       checked={multisearchDiffEnabled} 
+       onChange={(e: any) => setMultisearchDiffEnabled(e.target.checked)}
+     >
+       <span style={{ fontWeight: "500" }}>Enable multi-search diff matching</span>
+     </VSCodeCheckbox>
+     ```
+
+5. Add the setting to handleSubmit in SettingsView.tsx:
+   - Add a vscode.postMessage call to send the setting's value when clicking Done
+   - Example:
+     ```typescript
+     vscode.postMessage({ type: "multisearchDiffEnabled", bool: multisearchDiffEnabled })
+     ```
+
+These steps ensure that:
+- The setting's state is properly typed throughout the application
+- The setting persists between sessions
+- The setting's value is properly synchronized between the webview and extension
+- The setting has a proper UI representation in the settings view

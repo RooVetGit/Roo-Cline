@@ -103,6 +103,7 @@ export class Cline {
 		task?: string | undefined,
 		images?: string[] | undefined,
 		historyItem?: HistoryItem | undefined,
+		multisearchDiffEnabled?: boolean,
 	) {
 		this.providerRef = new WeakRef(provider)
 		this.api = buildApiHandler(apiConfiguration)
@@ -113,7 +114,7 @@ export class Cline {
 		this.customInstructions = customInstructions
 		this.diffEnabled = enableDiff ?? false
 		if (this.diffEnabled && this.api.getModel().id) {
-			this.diffStrategy = getDiffStrategy(this.api.getModel().id, fuzzyMatchThreshold ?? 1.0)
+			this.diffStrategy = getDiffStrategy(this.api.getModel().id, fuzzyMatchThreshold ?? 1.0, multisearchDiffEnabled ?? false)
 		}
 		if (historyItem) {
 			this.taskId = historyItem.id

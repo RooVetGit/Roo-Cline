@@ -40,6 +40,8 @@ const SettingsView = ({ onDone }: SettingsViewProps) => {
 		allowedCommands,
 		fuzzyMatchThreshold,
 		setFuzzyMatchThreshold,
+		multisearchDiffEnabled,
+		setMultisearchDiffEnabled,
 	} = useExtensionState()
 	const [apiErrorMessage, setApiErrorMessage] = useState<string | undefined>(undefined)
 	const [modelIdErrorMessage, setModelIdErrorMessage] = useState<string | undefined>(undefined)
@@ -67,6 +69,7 @@ const SettingsView = ({ onDone }: SettingsViewProps) => {
 			vscode.postMessage({ type: "diffEnabled", bool: diffEnabled })
 			vscode.postMessage({ type: "browserLargeViewport", bool: browserLargeViewport })
 			vscode.postMessage({ type: "fuzzyMatchThreshold", value: fuzzyMatchThreshold ?? 1.0 })
+			vscode.postMessage({ type: "multisearchDiffEnabled", bool: multisearchDiffEnabled })
 			onDone()
 		}
 	}
@@ -364,6 +367,22 @@ const SettingsView = ({ onDone }: SettingsViewProps) => {
 							When enabled, Cline will use a larger viewport size for browser interactions.
 						</p>
 					</div>
+
+					{diffEnabled && (
+						<div style={{ marginBottom: 10 }}>
+							<VSCodeCheckbox checked={multisearchDiffEnabled} onChange={(e: any) => setMultisearchDiffEnabled(e.target.checked)}>
+								<span style={{ fontWeight: "500" }}>Enable parallel diff edits</span>
+							</VSCodeCheckbox>
+							<p
+								style={{
+									fontSize: "12px",
+									marginTop: "5px",
+									color: "var(--vscode-descriptionForeground)",
+								}}>
+								When enabled, Cline will attempt to apply multiple diff edits in parallel, making editing faster.
+							</p>
+						</div>
+					)}
 
 					<div style={{ marginBottom: 5 }}>
 						<div style={{ marginBottom: 10 }}>

@@ -71,6 +71,7 @@ type GlobalStateKey =
 	| "alwaysAllowMcp"
 	| "browserLargeViewport"
 	| "fuzzyMatchThreshold"
+	| "multisearchDiffEnabled"
 
 export const GlobalFileNames = {
 	apiConversationHistory: "api_conversation_history.json",
@@ -219,7 +220,8 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			apiConfiguration,
 			customInstructions,
 			diffEnabled,
-			fuzzyMatchThreshold
+			fuzzyMatchThreshold,
+			multisearchDiffEnabled
 		} = await this.getState()
 		
 		this.cline = new Cline(
@@ -229,7 +231,9 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			diffEnabled,
 			fuzzyMatchThreshold,
 			task,
-			images
+			images,
+			undefined,
+			multisearchDiffEnabled
 		)
 	}
 
@@ -239,7 +243,8 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			apiConfiguration,
 			customInstructions,
 			diffEnabled,
-			fuzzyMatchThreshold
+			fuzzyMatchThreshold,
+			multisearchDiffEnabled
 		} = await this.getState()
 		
 		this.cline = new Cline(
@@ -250,7 +255,8 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			fuzzyMatchThreshold,
 			undefined,
 			undefined,
-			historyItem
+			historyItem,
+			multisearchDiffEnabled
 		)
 	}
 
@@ -622,6 +628,10 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 						await this.updateGlobalState("fuzzyMatchThreshold", message.value)
 						await this.postStateToWebview()
 						break
+					case "multisearchDiffEnabled":
+						await this.updateGlobalState("multisearchDiffEnabled", message.bool)
+						await this.postStateToWebview()
+						break
 				}
 			},
 			null,
@@ -937,9 +947,9 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 	}
 
 	async getStateToPostToWebview() {
-		const { 
-			apiConfiguration, 
-			lastShownAnnouncementId, 
+		const {
+			apiConfiguration,
+			lastShownAnnouncementId,
 			customInstructions,
 			alwaysAllowReadOnly,
 			alwaysAllowWrite,
@@ -951,6 +961,7 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			taskHistory,
 			soundVolume,
 			browserLargeViewport,
+			multisearchDiffEnabled,
 		} = await this.getState()
 		
 		const allowedCommands = vscode.workspace
@@ -977,6 +988,7 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			allowedCommands,
 			soundVolume: soundVolume ?? 0.5,
 			browserLargeViewport: browserLargeViewport ?? false,
+			multisearchDiffEnabled: multisearchDiffEnabled ?? false,
 		}
 	}
 
@@ -1072,6 +1084,7 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			soundVolume,
 			browserLargeViewport,
 			fuzzyMatchThreshold,
+			multisearchDiffEnabled,
 		] = await Promise.all([
 			this.getGlobalState("apiProvider") as Promise<ApiProvider | undefined>,
 			this.getGlobalState("apiModelId") as Promise<string | undefined>,
@@ -1112,6 +1125,7 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			this.getGlobalState("soundVolume") as Promise<number | undefined>,
 			this.getGlobalState("browserLargeViewport") as Promise<boolean | undefined>,
 			this.getGlobalState("fuzzyMatchThreshold") as Promise<number | undefined>,
+			this.getGlobalState("multisearchDiffEnabled") as Promise<boolean | undefined>,
 		])
 
 		let apiProvider: ApiProvider
@@ -1170,6 +1184,7 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			soundVolume,
 			browserLargeViewport: browserLargeViewport ?? false,
 			fuzzyMatchThreshold: fuzzyMatchThreshold ?? 1.0,
+			multisearchDiffEnabled: multisearchDiffEnabled ?? false,
 		}
 	}
 

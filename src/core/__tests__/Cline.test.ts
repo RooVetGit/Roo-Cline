@@ -316,8 +316,8 @@ describe('Cline', () => {
 
             expect(cline.diffEnabled).toBe(true);
             expect(cline.diffStrategy).toBeDefined();
-            expect(getDiffStrategySpy).toHaveBeenCalledWith('claude-3-5-sonnet-20241022', 0.9);
-            
+            expect(getDiffStrategySpy).toHaveBeenCalledWith('claude-3-5-sonnet-20241022', 0.9, false);
+
             getDiffStrategySpy.mockRestore();
         });
 
@@ -335,8 +335,8 @@ describe('Cline', () => {
 
             expect(cline.diffEnabled).toBe(true);
             expect(cline.diffStrategy).toBeDefined();
-            expect(getDiffStrategySpy).toHaveBeenCalledWith('claude-3-5-sonnet-20241022', 1.0);
-            
+            expect(getDiffStrategySpy).toHaveBeenCalledWith('claude-3-5-sonnet-20241022', 1.0, false);
+
             getDiffStrategySpy.mockRestore();
         });
 

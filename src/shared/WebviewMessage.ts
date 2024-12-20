@@ -40,6 +40,7 @@ export interface WebviewMessage {
 		| "toggleToolAlwaysAllow"
 		| "toggleMcpServer"
 		| "fuzzyMatchThreshold"
+		| "multisearchDiffEnabled"
 	text?: string
 	disabled?: boolean
 	askResponse?: ClineAskResponse

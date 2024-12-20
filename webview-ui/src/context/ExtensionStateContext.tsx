@@ -33,6 +33,7 @@ export interface ExtensionStateContextType extends ExtensionState {
 	setDiffEnabled: (value: boolean) => void
 	setBrowserLargeViewport: (value: boolean) => void
 	setFuzzyMatchThreshold: (value: number) => void
+	setMultisearchDiffEnabled: (value: boolean) => void
 }
 
 const ExtensionStateContext = createContext<ExtensionStateContextType | undefined>(undefined)
@@ -48,6 +49,7 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		soundVolume: 0.5,
 		diffEnabled: false,
 		fuzzyMatchThreshold: 1.0,
+		multisearchDiffEnabled: false,
 	})
 	const [didHydrateState, setDidHydrateState] = useState(false)
 	const [showWelcome, setShowWelcome] = useState(false)
@@ -136,6 +138,7 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		filePaths,
 		soundVolume: state.soundVolume,
 		fuzzyMatchThreshold: state.fuzzyMatchThreshold,
+		multisearchDiffEnabled: state.multisearchDiffEnabled,
 		setApiConfiguration: (value) => setState((prevState) => ({
 			...prevState,
 			apiConfiguration: value
@@ -153,6 +156,7 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		setDiffEnabled: (value) => setState((prevState) => ({ ...prevState, diffEnabled: value })),
 		setBrowserLargeViewport: (value) => setState((prevState) => ({ ...prevState, browserLargeViewport: value })),
 		setFuzzyMatchThreshold: (value) => setState((prevState) => ({ ...prevState, fuzzyMatchThreshold: value })),
+		setMultisearchDiffEnabled: (value: boolean) => setState((prevState) => ({ ...prevState, multisearchDiffEnabled: value })),
 	}
 
 	return <ExtensionStateContext.Provider value={contextValue}>{children}</ExtensionStateContext.Provider>

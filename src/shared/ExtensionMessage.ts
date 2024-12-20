@@ -18,6 +18,7 @@ export interface ExtensionMessage {
 		| "partialMessage"
 		| "openRouterModels"
 		| "mcpServers"
+		| "multilineDiffEnabled"
 	text?: string
 	action?:
 		| "chatButtonClicked"
@@ -34,6 +35,7 @@ export interface ExtensionMessage {
 	partialMessage?: ClineMessage
 	openRouterModels?: Record<string, ModelInfo>
 	mcpServers?: McpServer[]
+	bool?: boolean
 }
 
 export interface ExtensionState {
@@ -55,6 +57,7 @@ export interface ExtensionState {
 	diffEnabled?: boolean
 	browserLargeViewport?: boolean
 	fuzzyMatchThreshold?: number
+	multisearchDiffEnabled?: boolean
 }
 
 export interface ClineMessage {

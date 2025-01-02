@@ -1,6 +1,6 @@
 // type that represents json data that is sent from extension to webview, called ExtensionMessage and has 'type' enum which can be 'plusButtonClicked' or 'settingsButtonClicked' or 'hello'
 
-import { ApiConfiguration, ModelInfo } from "./api"
+import { ApiConfiguration, ApiProvider, ModelInfo } from "./api"
 import { HistoryItem } from "./HistoryItem"
 import { McpServer } from "./mcp"
 
@@ -20,6 +20,7 @@ export interface ExtensionMessage {
 		| "openAiModels"
 		| "mcpServers"
 		| "enhancedPrompt"
+		| "listApiConfig"
 	text?: string
 	action?:
 		| "chatButtonClicked"
@@ -37,6 +38,12 @@ export interface ExtensionMessage {
 	openRouterModels?: Record<string, ModelInfo>
 	openAiModels?: string[]
 	mcpServers?: McpServer[]
+	listApiConfig?: ApiConfigMeta[]
+}
+
+export interface ApiConfigMeta {
+	name: string
+	apiProvider?: ApiProvider
 }
 
 export interface ExtensionState {
@@ -45,6 +52,8 @@ export interface ExtensionState {
 	taskHistory: HistoryItem[]
 	shouldShowAnnouncement: boolean
 	apiConfiguration?: ApiConfiguration
+	currentApiConfigName?: string
+	listApiConfigMeta?: ApiConfigMeta[]
 	customInstructions?: string
 	alwaysAllowReadOnly?: boolean
 	alwaysAllowWrite?: boolean

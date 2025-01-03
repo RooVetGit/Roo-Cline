@@ -46,6 +46,10 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
 
 	const renderOptionContent = (option: ContextMenuQueryItem) => {
 		switch (option.type) {
+			case ContextMenuOptionType.GitDiff:
+				return <span>Git Content Change</span>
+			case ContextMenuOptionType.GitStatus:
+				return <span>List Git File Change</span>
 			case ContextMenuOptionType.Problems:
 				return <span>Problems</span>
 			case ContextMenuOptionType.URL:
@@ -89,6 +93,10 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
 				return "link"
 			case ContextMenuOptionType.NoResults:
 				return "info"
+			case ContextMenuOptionType.GitDiff:
+				return "info"
+			case ContextMenuOptionType.GitStatus:
+				return "file"
 			default:
 				return "file"
 		}

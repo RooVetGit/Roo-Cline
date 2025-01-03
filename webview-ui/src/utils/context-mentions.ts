@@ -52,6 +52,8 @@ export enum ContextMenuOptionType {
 	Problems = "problems",
 	URL = "url",
 	NoResults = "noResults",
+	GitDiff = "git-diff",
+	GitStatus = "git-status"
 }
 
 export interface ContextMenuQueryItem {
@@ -84,6 +86,8 @@ export function getContextMenuOptions(
 			{ type: ContextMenuOptionType.Problems },
 			{ type: ContextMenuOptionType.Folder },
 			{ type: ContextMenuOptionType.File },
+			{ type: ContextMenuOptionType.GitDiff },
+			{ type: ContextMenuOptionType.GitStatus },
 		]
 	}
 
@@ -121,6 +125,8 @@ export function shouldShowContextMenu(text: string, position: number): boolean {
 
 	// Don't show the menu if it's a problems
 	if (textAfterAt.toLowerCase().startsWith("problems")) return false
+	if (textAfterAt.toLowerCase().startsWith("git-diff")) return false
+	if (textAfterAt.toLowerCase().startsWith("git-status")) return false
 
 	// NOTE: it's okay that menu shows when there's trailing punctuation since user could be inputting a path with marks
 

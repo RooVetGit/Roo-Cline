@@ -45,8 +45,8 @@ jest.mock('@modelcontextprotocol/sdk/client/stdio.js', () => ({
 // Mock fileExistsAtPath
 jest.mock('../../utils/fs', () => ({
     fileExistsAtPath: jest.fn().mockImplementation((filePath) => {
-        return filePath.includes('ui_messages.json') || 
-               filePath.includes('api_conversation_history.json');
+        return filePath.includes('ui_messages.json') ||
+            filePath.includes('api_conversation_history.json');
     })
 }));
 
@@ -104,7 +104,46 @@ jest.mock('vscode', () => {
         tabs: [mockTab]
     };
 
+    const mockRepository = {
+        state: {
+            HEAD: {
+                name: 'main',
+                commit: 'abc123'
+            }
+        },
+        ui: {
+            selected: true
+        },
+        rootUri: {
+            fsPath: "/mock/workspace/path"
+        }
+    };
+
+    const mockGitAPI = {
+        repositories: [mockRepository],
+        onDidChangeState: jest.fn(),
+        onDidOpenRepository: jest.fn(),
+        onDidCloseRepository: jest.fn()
+    };
+
+    const mockGitExtension = {
+        enabled: true,
+        exports: {
+            getAPI: jest.fn().mockReturnValue(mockGitAPI)
+        },
+        activate: jest.fn().mockImplementation(async () => { })
+    };
+
+
     return {
+        extensions: {
+            getExtension: jest.fn().mockImplementation((id) => {
+                if (id === 'vscode.git') {
+                    return mockGitExtension;
+                }
+                return undefined;
+            })
+        },
         window: {
             createTextEditorDecorationType: jest.fn().mockReturnValue({
                 dispose: jest.fn()
@@ -190,7 +229,7 @@ describe('Cline', () => {
     let mockApiConfig: ApiConfiguration;
     let mockOutputChannel: any;
     let mockExtensionContext: vscode.ExtensionContext;
-    
+
     beforeEach(() => {
         // Setup mock extension context
         mockExtensionContext = {
@@ -248,7 +287,7 @@ describe('Cline', () => {
 
         // Setup mock provider with output channel
         mockProvider = new ClineProvider(mockExtensionContext, mockOutputChannel) as jest.Mocked<ClineProvider>;
-        
+
         // Setup mock API configuration
         mockApiConfig = {
             apiProvider: 'anthropic',
@@ -308,7 +347,7 @@ describe('Cline', () => {
 
         it('should use provided fuzzy match threshold', () => {
             const getDiffStrategySpy = jest.spyOn(require('../diff/DiffStrategy'), 'getDiffStrategy');
-            
+
             const cline = new Cline(
                 mockProvider,
                 mockApiConfig,
@@ -321,13 +360,13 @@ describe('Cline', () => {
             expect(cline.diffEnabled).toBe(true);
             expect(cline.diffStrategy).toBeDefined();
             expect(getDiffStrategySpy).toHaveBeenCalledWith('claude-3-5-sonnet-20241022', 0.9);
-            
+
             getDiffStrategySpy.mockRestore();
         });
 
         it('should pass default threshold to diff strategy when not provided', () => {
             const getDiffStrategySpy = jest.spyOn(require('../diff/DiffStrategy'), 'getDiffStrategy');
-            
+
             const cline = new Cline(
                 mockProvider,
                 mockApiConfig,
@@ -340,7 +379,7 @@ describe('Cline', () => {
             expect(cline.diffEnabled).toBe(true);
             expect(cline.diffStrategy).toBeDefined();
             expect(getDiffStrategySpy).toHaveBeenCalledWith('claude-3-5-sonnet-20241022', 1.0);
-            
+
             getDiffStrategySpy.mockRestore();
         });
 
@@ -377,7 +416,7 @@ describe('Cline', () => {
                     return mockDate.getTime();
                 }
             }
-            
+
             global.Date = MockDate as DateConstructor;
 
             // Create a proper mock of Intl.DateTimeFormat
@@ -388,7 +427,7 @@ describe('Cline', () => {
                 format: () => '1/1/2024, 5:00:00 AM'
             };
 
-            const MockDateTimeFormat = function(this: any) {
+            const MockDateTimeFormat = function (this: any) {
                 return mockDateTimeFormat;
             } as any;
 
@@ -413,14 +452,14 @@ describe('Cline', () => {
             );
 
             const details = await cline['getEnvironmentDetails'](false);
-            
+
             // Verify timezone information is present and formatted correctly
             expect(details).toContain('America/Los_Angeles');
             expect(details).toMatch(/UTC-7:00/); // Fixed offset for America/Los_Angeles
             expect(details).toContain('# Current Time');
             expect(details).toMatch(/1\/1\/2024.*5:00:00 AM.*\(America\/Los_Angeles, UTC-7:00\)/); // Full time string format
         });
-    
+
         describe('API conversation handling', () => {
             it('should clean conversation history before sending to API', async () => {
                 const cline = new Cline(
@@ -431,7 +470,7 @@ describe('Cline', () => {
                     undefined,
                     'test task'
                 );
-    
+
                 // Mock the API's createMessage method to capture the conversation history
                 const createMessageSpy = jest.fn();
                 const mockStream = {
@@ -451,7 +490,7 @@ describe('Cline', () => {
                         // Cleanup
                     }
                 } as AsyncGenerator<ApiStreamChunk>;
-                
+
                 jest.spyOn(cline.api, 'createMessage').mockImplementation((...args) => {
                     createMessageSpy(...args);
                     return mockStream;
@@ -473,7 +512,7 @@ describe('Cline', () => {
 
                 // Get all calls to createMessage
                 const calls = createMessageSpy.mock.calls;
-                
+
                 // Find the call that includes our test message
                 const relevantCall = calls.find(call =>
                     call[1]?.some((msg: any) =>

@@ -7,7 +7,20 @@ const vscode = {
     })
   },
   workspace: {
-    onDidSaveTextDocument: jest.fn()
+    onDidSaveTextDocument: jest.fn(),
+    workspaceFolders: [{
+      uri: {
+        fsPath: '/workspace'
+      }
+    }]
+  },
+  extensions: {
+    getExtension: jest.fn().mockReturnValue({
+      activate: jest.fn(),
+      exports: {
+        getAPI: jest.fn()
+      }
+    })
   },
   Disposable: class {
     dispose() {}

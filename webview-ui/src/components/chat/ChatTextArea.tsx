@@ -96,6 +96,8 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 		const queryItems = useMemo(() => {
 			return [
 				{ type: ContextMenuOptionType.Problems, value: "problems" },
+				{ type: ContextMenuOptionType.GitDiff, value: "git content change" },
+				{ type: ContextMenuOptionType.GitStatus, value: "git status" },
 				...filePaths
 					.map((file) => "/" + file)
 					.map((path) => ({
@@ -149,6 +151,12 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 						insertValue = value || ""
 					} else if (type === ContextMenuOptionType.Problems) {
 						insertValue = "problems"
+					}
+					else if (type === ContextMenuOptionType.GitDiff) {
+						insertValue = "git-diff"
+					}
+					else if (type === ContextMenuOptionType.GitStatus) {
+						insertValue = "git-status"
 					}
 
 					const { newValue, mentionIndex } = insertMention(

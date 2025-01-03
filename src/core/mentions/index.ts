@@ -7,6 +7,7 @@ import fs from "fs/promises"
 import { extractTextFromFile } from "../../integrations/misc/extract-text"
 import { isBinaryFile } from "isbinaryfile"
 import { diagnosticsToProblemsString } from "../../integrations/diagnostics"
+import { GitProvider } from "../../integrations/git/GitProvider"
 
 export function openMention(mention?: string): void {
 	if (!mention) {
@@ -28,13 +29,16 @@ export function openMention(mention?: string): void {
 		}
 	} else if (mention === "problems") {
 		vscode.commands.executeCommand("workbench.actions.view.problems")
+	} else if (mention === "git-diff" || mention === "git-status") {
+		vscode.commands.executeCommand("workbench.view.scm")
 	} else if (mention.startsWith("http")) {
 		vscode.env.openExternal(vscode.Uri.parse(mention))
 	}
 }
-
 export async function parseMentions(text: string, cwd: string, urlContentFetcher: UrlContentFetcher): Promise<string> {
 	const mentions: Set<string> = new Set()
+	const gitProvider = new GitProvider()
+
 	let parsedText = text.replace(mentionRegexGlobal, (match, mention) => {
 		mentions.add(mention)
 		if (mention.startsWith("http")) {
@@ -46,6 +50,10 @@ export async function parseMentions(text: string, cwd: string, urlContentFetcher
 				: `'${mentionPath}' (see below for file content)`
 		} else if (mention === "problems") {
 			return `Workspace Problems (see below for diagnostics)`
+		} else if (mention === "git-diff") {
+			return `Git Changes (see below for diff)`
+		} else if (mention === "git-status") {
+			return `Git Status (see below for status)`
 		}
 		return match
 	})
@@ -98,6 +106,28 @@ export async function parseMentions(text: string, cwd: string, urlContentFetcher
 				parsedText += `\n\n<workspace_diagnostics>\n${problems}\n</workspace_diagnostics>`
 			} catch (error) {
 				parsedText += `\n\n<workspace_diagnostics>\nError fetching diagnostics: ${error.message}\n</workspace_diagnostics>`
+			}
+		} else if (mention === "git-diff") {
+			try {
+				const diff = await gitProvider.getDiff()
+				if (!diff) {
+					parsedText += `\n\n<git_diff>\nNo changes detected in the repository.\n</git_diff>`
+				} else {
+					parsedText += `\n\n<git_diff>\n${diff}\n</git_diff>`
+				}
+			} catch (error) {
+				parsedText += `\n\n<git_diff>\nError fetching git diff: ${error.message}\n</git_diff>`
+			}
+		} else if (mention === "git-status") {
+			try {
+				const status = await gitProvider.getStatus()
+				if (!status) {
+					parsedText += `\n\n<git_status>\nNo changes in working tree.\n</git_status>`
+				} else {
+					parsedText += `\n\n<git_status>\n${status}\n</git_status>`
+				}
+			} catch (error) {
+				parsedText += `\n\n<git_status>\nError fetching git status: ${error.message}\n</git_status>`
 			}
 		}
 	}

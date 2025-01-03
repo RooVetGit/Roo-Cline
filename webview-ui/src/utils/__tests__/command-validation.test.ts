@@ -82,9 +82,20 @@ describe('Command Validation', () => {
 			expect(validateCommand('npm test "param with && inside"', allowedCommands)).toBe(true)
 		})
 
-		it('handles subshell execution attempts', () => {
-			expect(validateCommand('npm test $(echo dangerous)', allowedCommands)).toBe(false)
-			expect(validateCommand('npm test `rm -rf /`', allowedCommands)).toBe(false)
+		it('validates subshell commands', () => {
+			// Allowed subshell commands should pass
+			expect(validateCommand('npm test $(echo test)', allowedCommands)).toBe(true)
+			expect(validateCommand('npm test `echo hello`', allowedCommands)).toBe(true)
+			expect(validateCommand('echo $(echo nested $(echo allowed))', allowedCommands)).toBe(true)
+
+			// Disallowed subshell commands should fail
+			expect(validateCommand('npm test $(rm -rf /)', allowedCommands)).toBe(false)
+			expect(validateCommand('npm test `dangerous`', allowedCommands)).toBe(false)
+			expect(validateCommand('echo $(echo nested $(dangerous))', allowedCommands)).toBe(false)
+
+			// Mixed allowed/disallowed commands should fail
+			expect(validateCommand('echo $(echo ok && dangerous)', allowedCommands)).toBe(false)
+			expect(validateCommand('npm test $(echo test) && `dangerous`', allowedCommands)).toBe(false)
 		})
 
 		it('handles PowerShell patterns', () => {
@@ -96,6 +107,14 @@ describe('Command Validation', () => {
 		it('handles empty input', () => {
 			expect(validateCommand('', allowedCommands)).toBe(true)
 			expect(validateCommand('	', allowedCommands)).toBe(true)
+		})
+
+		it('validates complex kubectl commands with chaining and substitution', () => {
+			const kubectlAllowed = ['sleep', 'kubectl', 'echo']
+			const complexCommand = 'sleep 30 && kubectl get pods -n abc && echo "---" && kubectl logs -n abc $(kubectl get pods -n abc deployment=xyz -o jsonpath=\'{.items[0].metadata.name}\')'
+			
+			expect(validateCommand(complexCommand, kubectlAllowed)).toBe(true)
+			expect(validateCommand(complexCommand.replace('kubectl', 'dangerous'), kubectlAllowed)).toBe(false)
 		})
 	})
 })

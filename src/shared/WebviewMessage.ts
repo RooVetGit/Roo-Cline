@@ -50,6 +50,7 @@ export interface WebviewMessage {
 		| "deleteMessage"
 		| "terminalOutputLineLimit"
 		| "mcpEnabled"
+		| "setOpenAiCusModelInfo"
 	text?: string
 	disabled?: boolean
 	askResponse?: ClineAskResponse

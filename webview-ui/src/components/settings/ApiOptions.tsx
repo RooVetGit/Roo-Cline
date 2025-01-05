@@ -556,7 +556,7 @@ const ApiOptions = ({ showModelOptions, apiErrorMessage, modelIdErrorMessage }: 
 									value={apiConfiguration?.openAiCusModelInfo?.inputPrice?.toString() || openAiModelInfoSaneDefaults.inputPrice?.toString() || ""}
 									type="text"
 									style={{ width: "100%" }}
-									onInput={(e: any) => {
+									onChange={(e: any) => {
 										const parsed = parseFloat(e.target.value)
 										setApiConfiguration({
 											...apiConfiguration,
@@ -574,7 +574,7 @@ const ApiOptions = ({ showModelOptions, apiErrorMessage, modelIdErrorMessage }: 
 									value={apiConfiguration?.openAiCusModelInfo?.outputPrice?.toString() || openAiModelInfoSaneDefaults.outputPrice?.toString() || ""}
 									type="text"
 									style={{ width: "100%" }}
-									onInput={(e: any) => {
+									onChange={(e: any) => {
 										const parsed = parseFloat(e.target.value)
 										setApiConfiguration({
 											...apiConfiguration,
@@ -594,7 +594,7 @@ const ApiOptions = ({ showModelOptions, apiErrorMessage, modelIdErrorMessage }: 
 									value={apiConfiguration?.openAiCusModelInfo?.cacheWritesPrice?.toString() || openAiModelInfoSaneDefaults.cacheWritesPrice?.toString() || ""}
 									type="text"
 									style={{ width: "100%" }}
-									onInput={(e: any) => {
+									onChange={(e: any) => {
 										const parsed = parseFloat(e.target.value)
 										setApiConfiguration({
 											...apiConfiguration,
@@ -612,7 +612,8 @@ const ApiOptions = ({ showModelOptions, apiErrorMessage, modelIdErrorMessage }: 
 									value={apiConfiguration?.openAiCusModelInfo?.cacheReadsPrice?.toString() || openAiModelInfoSaneDefaults.cacheReadsPrice?.toString() || ""}
 									type="text"
 									style={{ width: "100%" }}
-									onInput={(e: any) => {
+									onChange={(e: any) => {
+										console.log(e)
 										const parsed = parseFloat(e.target.value)
 										setApiConfiguration({
 											...apiConfiguration,

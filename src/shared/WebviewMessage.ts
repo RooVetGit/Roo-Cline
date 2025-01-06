@@ -51,6 +51,7 @@ export interface WebviewMessage {
 		| "deleteMessage"
 		| "terminalOutputLineLimit"
 		| "mcpEnabled"
+		| "diffStrategy"
 	text?: string
 	disabled?: boolean
 	askResponse?: ClineAskResponse

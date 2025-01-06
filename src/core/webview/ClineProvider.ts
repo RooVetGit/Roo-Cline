@@ -82,6 +82,7 @@ type GlobalStateKey =
 	| "writeDelayMs"
 	| "terminalOutputLineLimit"
 	| "mcpEnabled"
+	| "diffStrategy"
 export const GlobalFileNames = {
 	apiConversationHistory: "api_conversation_history.json",
 	uiMessages: "ui_messages.json",
@@ -686,6 +687,10 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 						await this.updateGlobalState("terminalOutputLineLimit", message.value)
 						await this.postStateToWebview()
 						break
+					case "diffStrategy":
+						await this.updateGlobalState("diffStrategy", message.text as 'unified' | 'search-replace')
+						await this.postStateToWebview()
+						break
 					case "deleteMessage": {
 						const answer = await vscode.window.showInformationMessage(
 							"Are you sure you want to delete this message and all subsequent messages?",
@@ -1181,6 +1186,7 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			terminalOutputLineLimit,
 			fuzzyMatchThreshold,
 			mcpEnabled,
+			diffStrategy,
 		} = await this.getState()
 		
 		const allowedCommands = vscode.workspace
@@ -1213,6 +1219,7 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			terminalOutputLineLimit: terminalOutputLineLimit ?? 500,
 			fuzzyMatchThreshold: fuzzyMatchThreshold ?? 1.0,
 			mcpEnabled: mcpEnabled ?? true,
+			diffStrategy: diffStrategy ?? 'search-replace'
 		}
 	}
 
@@ -1318,6 +1325,7 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			screenshotQuality,
 			terminalOutputLineLimit,
 			mcpEnabled,
+			diffStrategy,
 		] = await Promise.all([
 			this.getGlobalState("apiProvider") as Promise<ApiProvider | undefined>,
 			this.getGlobalState("apiModelId") as Promise<string | undefined>,
@@ -1368,6 +1376,7 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			this.getGlobalState("screenshotQuality") as Promise<number | undefined>,
 			this.getGlobalState("terminalOutputLineLimit") as Promise<number | undefined>,
 			this.getGlobalState("mcpEnabled") as Promise<boolean | undefined>,
+			this.getGlobalState("diffStrategy") as Promise<'unified' | 'search-replace' | undefined>,
 		])
 
 		let apiProvider: ApiProvider
@@ -1462,6 +1471,7 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 				return langMap[vscodeLang.split('-')[0]] ?? 'English';
 			})(),
 			mcpEnabled: mcpEnabled ?? true,
+			diffStrategy: diffStrategy ?? 'search-replace'
 		}
 	}
 

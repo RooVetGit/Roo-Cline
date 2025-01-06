@@ -10,6 +10,7 @@ export type DiffResult =
       matchedRange?: { start: number; end: number };
       searchContent?: string;
       bestMatch?: string;
+      fuzzFactor?: number;
     }};
 
 export interface DiffStrategy {

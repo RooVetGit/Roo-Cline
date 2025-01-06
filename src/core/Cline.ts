@@ -70,6 +70,7 @@ export class Cline {
 	customInstructions?: string
 	diffStrategy?: DiffStrategy
 	diffEnabled: boolean = false
+	private fuzzyMatchThreshold?: number
 
 	apiConversationHistory: (Anthropic.MessageParam & { ts?: number })[] = []
 	clineMessages: ClineMessage[] = []
@@ -108,15 +109,14 @@ export class Cline {
 	) {
 		this.providerRef = new WeakRef(provider)
 		this.api = buildApiHandler(apiConfiguration)
+		this.customInstructions = customInstructions
+		this.diffEnabled = enableDiff ?? false
+		this.fuzzyMatchThreshold = fuzzyMatchThreshold
 		this.terminalManager = new TerminalManager()
 		this.urlContentFetcher = new UrlContentFetcher(provider.context)
 		this.browserSession = new BrowserSession(provider.context)
 		this.diffViewProvider = new DiffViewProvider(cwd)
-		this.customInstructions = customInstructions
-		this.diffEnabled = enableDiff ?? false
-		if (this.diffEnabled && this.api.getModel().id) {
-			this.diffStrategy = getDiffStrategy(this.api.getModel().id, fuzzyMatchThreshold ?? 1.0)
-		}
+
 		if (historyItem) {
 			this.taskId = historyItem.id
 			this.resumeTaskFromHistory()
@@ -219,6 +219,8 @@ export class Cline {
 				cacheWrites: apiMetrics.totalCacheWrites,
 				cacheReads: apiMetrics.totalCacheReads,
 				totalCost: apiMetrics.totalCost,
+				diffStrategy: this.diffStrategy instanceof UnifiedDiffStrategy ? 'unified' : 'search-replace',
+				fuzzyMatchThreshold: this.fuzzyMatchThreshold
 			})
 		} catch (error) {
 			console.error("Failed to save cline messages:", error)
@@ -406,6 +408,19 @@ export class Cline {
 		this.apiConversationHistory = []
 		await this.providerRef.deref()?.postStateToWebview()
 
+		// Initialize diff strategy for new tasks
+		if (this.diffEnabled && this.api.getModel().id) {
+			this.diffStrategy = getDiffStrategy(this.api.getModel().id, this.fuzzyMatchThreshold ?? 1.0, 'search-replace')
+
+			const provider = this.providerRef.deref()
+			if (provider) {
+				const { diffStrategy: selectedStrategy } = await provider.getState()
+				if (selectedStrategy && this.diffEnabled && this.api.getModel().id) {
+					this.diffStrategy = getDiffStrategy(this.api.getModel().id, this.fuzzyMatchThreshold ?? 1.0, selectedStrategy)
+				}
+			}
+		}
+
 		await this.say("text", task, images)
 
 		let imageBlocks: Anthropic.ImageBlockParam[] = formatResponse.imageBlocks(images)
@@ -428,6 +443,18 @@ export class Cline {
 		)
 		if (lastRelevantMessageIndex !== -1) {
 			modifiedClineMessages.splice(lastRelevantMessageIndex + 1)
+		}
+
+		// Get the history item to restore diff strategy
+		const history = ((await this.providerRef.deref()?.getGlobalState("taskHistory")) as HistoryItem[] | undefined) || []
+		const historyItem = history.find((item) => item.id === this.taskId)
+		if (historyItem?.diffStrategy && this.diffEnabled && this.api.getModel().id) {
+			this.diffStrategy = getDiffStrategy(
+				this.api.getModel().id,
+				historyItem.fuzzyMatchThreshold ?? 1.0,
+				historyItem.diffStrategy
+			)
+			this.fuzzyMatchThreshold = historyItem.fuzzyMatchThreshold
 		}
 
 		// since we don't use api_req_finished anymore, we need to check if the last api_req_started has a cost value, if it doesn't and no cancellation reason to present, then we remove it since it indicates an api request without any partial content streamed

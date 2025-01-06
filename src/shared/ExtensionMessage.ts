@@ -65,6 +65,7 @@ export interface ExtensionState {
 	writeDelayMs: number
 	terminalOutputLineLimit?: number
 	mcpEnabled: boolean
+	diffStrategy?: 'unified' | 'search-replace'
 }
 
 export interface ClineMessage {

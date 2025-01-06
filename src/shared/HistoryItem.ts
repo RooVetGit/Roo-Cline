@@ -7,4 +7,6 @@ export type HistoryItem = {
 	cacheWrites?: number
 	cacheReads?: number
 	totalCost: number
+	diffStrategy?: 'unified' | 'search-replace'
+	fuzzyMatchThreshold?: number
 }

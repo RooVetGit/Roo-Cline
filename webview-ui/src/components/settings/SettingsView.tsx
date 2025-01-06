@@ -51,6 +51,8 @@ const SettingsView = ({ onDone }: SettingsViewProps) => {
 		terminalOutputLineLimit,
 		setTerminalOutputLineLimit,
 		mcpEnabled,
+		diffStrategy,
+		setDiffStrategy,
 	} = useExtensionState()
 	const [apiErrorMessage, setApiErrorMessage] = useState<string | undefined>(undefined)
 	const [modelIdErrorMessage, setModelIdErrorMessage] = useState<string | undefined>(undefined)
@@ -78,6 +80,7 @@ const SettingsView = ({ onDone }: SettingsViewProps) => {
 			vscode.postMessage({ type: "diffEnabled", bool: diffEnabled })
 			vscode.postMessage({ type: "browserViewportSize", text: browserViewportSize })
 			vscode.postMessage({ type: "fuzzyMatchThreshold", value: fuzzyMatchThreshold ?? 1.0 })
+			vscode.postMessage({ type: "diffStrategy", text: diffStrategy ?? 'search-replace' })
 			vscode.postMessage({ type: "preferredLanguage", text: preferredLanguage })
 			vscode.postMessage({ type: "writeDelayMs", value: writeDelayMs })
 			vscode.postMessage({ type: "screenshotQuality", value: screenshotQuality ?? 75 })
@@ -260,29 +263,91 @@ const SettingsView = ({ onDone }: SettingsViewProps) => {
 
 					{diffEnabled && (
 						<div style={{ marginTop: 10 }}>
-							<div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-								<span style={{ fontWeight: "500", minWidth: '100px' }}>Match precision</span>
-								<input
-									type="range"
-									min="0.8"
-									max="1"
-									step="0.005"
-									value={fuzzyMatchThreshold ?? 1.0}
+							<div style={{ marginBottom: 10 }}>
+								<label style={{ fontWeight: "500", display: "block", marginBottom: 5 }}>Diff Strategy</label>
+								<select
+									value={diffStrategy ?? 'search-replace'}
 									onChange={(e) => {
-										setFuzzyMatchThreshold(parseFloat(e.target.value));
+										const newStrategy = e.target.value as 'unified' | 'search-replace'
+										setDiffStrategy(newStrategy)
+										// Set default values when switching strategies
+										if (newStrategy === 'unified') {
+											setFuzzyMatchThreshold(1) // 0 lines of fuzz
+										} else {
+											setFuzzyMatchThreshold(1) // 100% match precision
+										}
 									}}
 									style={{
-										flexGrow: 1,
-										accentColor: 'var(--vscode-button-background)',
-										height: '2px'
-									}}
-								/>
-								<span style={{ minWidth: '35px', textAlign: 'left' }}>
-									{Math.round((fuzzyMatchThreshold || 1) * 100)}%
-								</span>
+										width: "100%",
+										padding: "4px 8px",
+										backgroundColor: "var(--vscode-input-background)",
+										color: "var(--vscode-input-foreground)",
+										border: "1px solid var(--vscode-input-border)",
+										borderRadius: "2px",
+										height: "28px"
+									}}>
+									<option value="search-replace">Search/Replace</option>
+									<option value="unified">Unified Diff</option>
+								</select>
+								<p style={{ fontSize: "12px", marginTop: "5px", color: "var(--vscode-descriptionForeground)" }}>
+									{diffStrategy === 'unified' 
+										? "Unified diff uses standard patch format with line numbers and context. More precise but less flexible."
+										: "Search/Replace uses fuzzy matching to find and replace code blocks. More flexible but requires careful threshold tuning."}
+								</p>
 							</div>
+
+							{diffStrategy === 'unified' ? (
+								<div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+									<span style={{ fontWeight: "500", minWidth: '100px' }}>Fuzz Factor</span>
+									<input
+										type="range"
+										min="0"
+										max="5"
+										step="1"
+										value={Math.round((1 - (fuzzyMatchThreshold ?? 1)) * 5)}
+										onChange={(e) => {
+											const value = parseInt(e.target.value)
+											setFuzzyMatchThreshold(1 - (value / 5))
+										}}
+										style={{
+											flexGrow: 1,
+											accentColor: 'var(--vscode-button-background)',
+											height: '2px'
+										}}
+									/>
+									<span style={{ minWidth: '35px', textAlign: 'left' }}>
+										{Math.round((1 - (fuzzyMatchThreshold ?? 1)) * 5)}
+									</span>
+								</div>
+							) : (
+								<div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+									<span style={{ fontWeight: "500", minWidth: '100px' }}>Match Precision</span>
+									<input
+										type="range"
+										min="80"
+										max="100"
+										step="1"
+										value={Math.round((fuzzyMatchThreshold ?? 1) * 100)}
+										onChange={(e) => {
+											const value = parseInt(e.target.value)
+											setFuzzyMatchThreshold(value / 100)
+										}}
+										style={{
+											flexGrow: 1,
+											accentColor: 'var(--vscode-button-background)',
+											height: '2px'
+										}}
+									/>
+									<span style={{ minWidth: '35px', textAlign: 'left' }}>
+										{Math.round((fuzzyMatchThreshold ?? 1) * 100) + '%'}
+									</span>
+								</div>
+							)}
+							
 							<p style={{ fontSize: "12px", marginBottom: 10, color: "var(--vscode-descriptionForeground)" }}>
-								This slider controls how precisely code sections must match when applying diffs. Lower values allow more flexible matching but increase the risk of incorrect replacements. Use values below 100% with extreme caution.
+								{diffStrategy === 'unified'
+									? "Number of lines that are allowed to differ before rejecting a patch. Higher values allow more flexibility but may cause incorrect matches."
+									: "Controls how precisely code sections must match when applying diffs. Lower values allow more flexible matching but increase the risk of incorrect replacements. Use values below 100% with extreme caution."}
 							</p>
 						</div>
 					)}

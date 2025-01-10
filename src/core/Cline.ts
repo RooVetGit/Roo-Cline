@@ -2358,46 +2358,23 @@ export class Cline {
 			// We need to apply parseMentions() to:
 			// 1. All TextBlockParam's text (first user message with task)
 			// 2. ToolResultBlockParam's content/context text arrays if it contains "<feedback>" (see formatToolDeniedFeedback, attemptCompletion, executeCommand, and consecutiveMistakeCount >= 3) or "<answer>" (see askFollowupQuestion), we place all user generated content in these tags so they can effectively be used as markers for when we should parse mentions)
+			// This is a temporary solution to dynamically load context mentions from tool results. It checks for the presence of tags that indicate that the tool was rejected and feedback was provided. However if we allow multiple tools responses in the future, we will need to parse mentions specifically within the user content tags.
+			// (Note: this caused the @/ import alias bug where file contents were being parsed as well, since v2 converted tool results to text blocks)
 			Promise.all(
 				userContent.map(async (block) => {
-					const shouldProcessMentions = (text: string) =>
-						text.includes("<task>") || text.includes("<feedback>");
-
 					if (block.type === "text") {
-						if (shouldProcessMentions(block.text)) {
+						// Important: We need to ensure any user generated content is wrapped in one of these tags so that we know to parse mentions
+						// FIXME: Only parse text in between these tags instead of the entire text block which may contain other tool results. This is part of a larger issue where we shouldn't be using regex to parse mentions in the first place (ie for cases where file paths have spaces)
+						if (
+							block.text.includes("<feedback>") ||
+							block.text.includes("<answer>") ||
+							block.text.includes("<task>")
+						) {
 							return {
 								...block,
 								text: await parseMentions(block.text, cwd, this.urlContentFetcher),
 							}
 						}
-						return block;
-					} else if (block.type === "tool_result") {
-						if (typeof block.content === "string") {
-							if (shouldProcessMentions(block.content)) {
-								return {
-									...block,
-									content: await parseMentions(block.content, cwd, this.urlContentFetcher),
-								}
-							}
-							return block;
-						} else if (Array.isArray(block.content)) {
-							const parsedContent = await Promise.all(
-								block.content.map(async (contentBlock) => {
-									if (contentBlock.type === "text" && shouldProcessMentions(contentBlock.text)) {
-										return {
-											...contentBlock,
-											text: await parseMentions(contentBlock.text, cwd, this.urlContentFetcher),
-										}
-									}
-									return contentBlock
-								}),
-							)
-							return {
-								...block,
-								content: parsedContent,
-							}
-						}
-						return block;
 					}
 					return block
 				}),

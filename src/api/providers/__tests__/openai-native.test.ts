@@ -113,7 +113,7 @@ describe("OpenAiNativeHandler", () => {
                 expect(mockCreate).toHaveBeenCalledWith({
                     model: "o1-preview",
                     messages: [
-                        { role: "user", content: systemPrompt },
+                        { role: "developer", content: systemPrompt },
                         { role: "user", content: "Hello" },
                     ],
                 })

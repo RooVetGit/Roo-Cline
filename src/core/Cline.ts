@@ -51,6 +51,7 @@ import { detectCodeOmission } from "../integrations/editor/detect-omission"
 import { BrowserSession } from "../services/browser/BrowserSession"
 import { OpenRouterHandler } from "../api/providers/openrouter"
 import { McpHub } from "../services/mcp/McpHub"
+import { SlackNotifier } from "../services/slack"
 
 const cwd =
 	vscode.workspace.workspaceFolders?.map((folder) => folder.uri.fsPath).at(0) ?? path.join(os.homedir(), "Desktop") // may or may not exist but fs checking existence would immediately ask for permission which would be bad UX, need to come up with a better solution
@@ -66,6 +67,7 @@ export class Cline {
 	private terminalManager: TerminalManager
 	private urlContentFetcher: UrlContentFetcher
 	private browserSession: BrowserSession
+	private slackNotifier?: SlackNotifier
 	private didEditFile: boolean = false
 	customInstructions?: string
 	diffStrategy?: DiffStrategy
@@ -96,6 +98,28 @@ export class Cline {
 	private didAlreadyUseTool = false
 	private didCompleteReadingStream = false
 
+	private async notifySlack(type: 'complete' | 'input' | 'fail', message: string) {
+		if (!this.slackNotifier) {
+			return;
+		}
+
+		try {
+			switch (type) {
+				case 'complete':
+					await this.slackNotifier.notifyTaskComplete(message);
+					break;
+				case 'input':
+					await this.slackNotifier.notifyUserInputNeeded(message);
+					break;
+				case 'fail':
+					await this.slackNotifier.notifyTaskFailed(message);
+					break;
+			}
+		} catch (error) {
+			vscode.window.showErrorMessage(`Failed to send Slack notification: ${error instanceof Error ? error.message : 'Unknown error'}`);
+		}
+	}
+
 	constructor(
 		provider: ClineProvider,
 		apiConfiguration: ApiConfiguration,
@@ -105,12 +129,40 @@ export class Cline {
 		task?: string | undefined,
 		images?: string[] | undefined,
 		historyItem?: HistoryItem | undefined,
+		slackConfig?: { enabled: boolean; webhookUrl: string }
 	) {
+		// Set taskId first
+		if (historyItem) {
+			this.taskId = historyItem.id
+		} else if (task || images) {
+			this.taskId = Date.now().toString()
+		} else {
+			throw new Error("Either historyItem or task/images must be provided")
+		}
+
 		this.providerRef = new WeakRef(provider)
 		this.api = buildApiHandler(apiConfiguration)
 		this.terminalManager = new TerminalManager()
 		this.urlContentFetcher = new UrlContentFetcher(provider.context)
 		this.browserSession = new BrowserSession(provider.context)
+		
+		// Initialize Slack notifier
+		if (slackConfig?.enabled && slackConfig?.webhookUrl) {
+			try {
+				this.slackNotifier = new SlackNotifier(slackConfig);
+				
+				// Send initialization notification
+				const initMessage = task
+					? `🚀 New task started: ${task}`
+					: historyItem
+						? `📝 Resuming task: ${historyItem.task}`
+						: "🔄 Roo Cline initialized";
+						
+				this.notifySlack('input', initMessage).catch(error => {
+				});
+			} catch (error) {
+			}
+		}
 		this.diffViewProvider = new DiffViewProvider(cwd)
 		this.customInstructions = customInstructions
 		this.diffEnabled = enableDiff ?? false
@@ -118,13 +170,9 @@ export class Cline {
 			this.diffStrategy = getDiffStrategy(this.api.getModel().id, fuzzyMatchThreshold ?? 1.0)
 		}
 		if (historyItem) {
-			this.taskId = historyItem.id
 			this.resumeTaskFromHistory()
 		} else if (task || images) {
-			this.taskId = Date.now().toString()
 			this.startTask(task, images)
-		} else {
-			throw new Error("Either historyItem or task/images must be provided")
 		}
 	}
 
@@ -166,7 +214,6 @@ export class Cline {
 			await fs.writeFile(filePath, JSON.stringify(this.apiConversationHistory))
 		} catch (error) {
 			// in the off chance this fails, we don't want to stop the task
-			console.error("Failed to save API conversation history:", error)
 		}
 	}
 
@@ -221,7 +268,6 @@ export class Cline {
 				totalCost: apiMetrics.totalCost,
 			})
 		} catch (error) {
-			console.error("Failed to save cline messages:", error)
 		}
 	}
 
@@ -233,6 +279,11 @@ export class Cline {
 		text?: string,
 		partial?: boolean,
 	): Promise<{ response: ClineAskResponse; text?: string; images?: string[] }> {
+		// Send notification for user input needed
+		if (type === "followup" && text && !partial) {
+			await this.notifySlack('input', text)
+		}
+
 		// If this Cline instance was aborted by the provider, then the only thing keeping us alive is a promise still running in the background, in which case we don't want to send its result to the webview as it is attached to a new instance of Cline now. So we can safely ignore the result of any active promises, and this class will be deallocated. (Although we set Cline = undefined in provider, that simply removes the reference to this instance, but the instance is still alive until this promise resolves or rejects.)
 		if (this.abort) {
 			throw new Error("Cline instance aborted")
@@ -313,10 +364,13 @@ export class Cline {
 		}
 
 		await pWaitFor(() => this.askResponse !== undefined || this.lastMessageTs !== askTs, { interval: 100 })
+
 		if (this.lastMessageTs !== askTs) {
 			throw new Error("Current ask promise was ignored") // could happen if we send multiple asks in a row i.e. with command_output. It's important that when we know an ask could fail, it is handled gracefully
 		}
+
 		const result = { response: this.askResponse!, text: this.askResponseText, images: this.askResponseImages }
+
 		this.askResponse = undefined
 		this.askResponseText = undefined
 		this.askResponseImages = undefined
@@ -891,6 +945,8 @@ export class Cline {
 		}
 
 		const block = cloneDeep(this.assistantMessageContent[this.currentStreamingContentIndex]) // need to create copy bc while stream is updating the array, it could be updating the reference block properties too
+		
+
 		switch (block.type) {
 			case "text": {
 				if (this.didRejectTool || this.didAlreadyUseTool) {
@@ -1049,10 +1105,9 @@ export class Cline {
 
 				const handleError = async (action: string, error: Error) => {
 					const errorString = `Error ${action}: ${JSON.stringify(serializeError(error))}`
-					await this.say(
-						"error",
-						`Error ${action}:\n${error.message ?? JSON.stringify(serializeError(error), null, 2)}`,
-					)
+					const errorMessage = `Error ${action}:\n${error.message ?? JSON.stringify(serializeError(error), null, 2)}`
+					await this.say("error", errorMessage)
+					await this.notifySlack('fail', errorMessage)
 					// this.toolResults.push({
 					// 	type: "tool_result",
 					// 	tool_use_id: toolUseId,
@@ -2003,13 +2058,62 @@ export class Cline {
 									commandResult = execCommandResult
 								} else {
 									await this.say("completion_result", result, undefined, false)
+									await (async () => {
+										try {
+											if (!result) {
+												console.warn("No result provided for completion notification", {
+													taskId: this.taskId,
+													timestamp: new Date().toISOString()
+												});
+											}
+
+											console.log("About to call notifySlack with type 'complete'", {
+												resultLength: result?.length,
+												taskId: this.taskId,
+												hasSlackNotifier: !!this.slackNotifier,
+												slackConfig: this.slackNotifier?.config,
+												timestamp: new Date().toISOString()
+											});
+
+											const completionMessage = result
+												? `✅ Task completed successfully!\n\nResult:\n${result}`
+												: "✅ Task completed successfully!";
+
+											// Make sure to await the notification
+											await this.notifySlack('complete', completionMessage);
+											
+											console.log("Successfully sent completion notification to Slack", {
+												taskId: this.taskId,
+												messageLength: completionMessage.length,
+												timestamp: new Date().toISOString()
+											});
+										} catch (error) {
+											console.error("Error during notifySlack call:", {
+												errorMessage: error instanceof Error ? error.message : 'Unknown error',
+												errorStack: error instanceof Error ? error.stack : 'No stack trace',
+												taskId: this.taskId
+											});
+											vscode.window.showErrorMessage(`Failed to send Slack completion notification: ${error instanceof Error ? error.message : 'Unknown error'}`);
+										}
+									})();
 								}
 
 								// we already sent completion_result says, an empty string asks relinquishes control over button and field
-								const { response, text, images } = await this.ask("completion_result", "", false)
+								let askResponse;
+								try {
+									askResponse = await this.ask("completion_result", "", false);
+								} catch (error) {
+									console.error("Error during ask call:", {
+										error,
+										stack: error instanceof Error ? error.stack : 'No stack trace',
+										taskId: this.taskId
+									});
+									throw error;
+								}
+								const { response, text, images } = askResponse;
 								if (response === "yesButtonClicked") {
-									pushToolResult("") // signals to recursive loop to stop (for now this never happens since yesButtonClicked will trigger a new task)
-									break
+									pushToolResult("");
+									break;
 								}
 								await this.say("user_feedback", text ?? "", images)
 
@@ -2173,7 +2277,6 @@ export class Cline {
 					// lastMessage.ts = Date.now() DO NOT update ts since it is used as a key for virtuoso list
 					lastMessage.partial = false
 					// instead of streaming partialMessage events, we do a save and post like normal to persist to disk
-					console.log("updating partial message", lastMessage)
 					// await this.saveClineMessages()
 				}
 
@@ -2240,7 +2343,6 @@ export class Cline {
 					}
 
 					if (this.abort) {
-						console.log("aborting stream...")
 						if (!this.abandoned) {
 							// only need to gracefully abort if this instance isn't abandoned (sometimes openrouter stream hangs, in which case this would affect future instances of cline)
 							await abortStream("user_cancelled")

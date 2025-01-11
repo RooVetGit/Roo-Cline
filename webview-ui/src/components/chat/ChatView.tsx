@@ -330,8 +330,10 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 				vscode.postMessage({ type: "askResponse", askResponse: "yesButtonClicked" })
 				break
 			case "completion_result":
+				// First send the completion approval, then start new task
+				vscode.postMessage({ type: "askResponse", askResponse: "yesButtonClicked" }); // Increase delay to ensure notification is processed
+				break;
 			case "resume_completed_task":
-				// extension waiting for feedback. but we can just present a new task button
 				startNewTask()
 				break
 		}

@@ -89,6 +89,9 @@ type GlobalStateKey =
 	| "requestDelaySeconds"
 	| "currentApiConfigName"
 	| "listApiConfigMeta"
+	| "slackConfig"
+	| "slackWebhookUrl"
+	| "slackNotificationsEnabled"
 
 export const GlobalFileNames = {
 	apiConversationHistory: "api_conversation_history.json",
@@ -234,45 +237,64 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 		this.outputChannel.appendLine("Webview view resolved")
 	}
 
-	async initClineWithTask(task?: string, images?: string[]) {
-		await this.clearTask()
-		const {
-			apiConfiguration,
-			customInstructions,
-			diffEnabled,
-			fuzzyMatchThreshold
-		} = await this.getState()
+	private async initClineWithTask(task?: string, images?: string[]): Promise<void> {
+		try {
+			await this.clearTask();
+			const {
+				apiConfiguration,
+				customInstructions,
+				diffEnabled,
+				fuzzyMatchThreshold,
+				slackConfig
+			} = await this.getState();
 
-		this.cline = new Cline(
-			this,
-			apiConfiguration,
-			customInstructions,
-			diffEnabled,
-			fuzzyMatchThreshold,
-			task,
-			images
-		)
+			this.cline = new Cline(
+				this,
+				apiConfiguration,
+				customInstructions,
+				diffEnabled,
+				fuzzyMatchThreshold,
+				task,
+				images,
+				undefined,
+				{
+					enabled: slackConfig?.enabled ?? false,
+					webhookUrl: slackConfig?.webhookUrl ?? ""
+				}
+			);
+		} catch (error) {
+			throw new Error(`Failed to initialize Cline with task: ${error instanceof Error ? error.message : 'Unknown error'}`);
+		}
 	}
 
-	async initClineWithHistoryItem(historyItem: HistoryItem) {
-		await this.clearTask()
-		const {
-			apiConfiguration,
-			customInstructions,
-			diffEnabled,
-			fuzzyMatchThreshold
-		} = await this.getState()
+	public async initClineWithHistoryItem(historyItem: HistoryItem): Promise<void> {
+		try {
+			await this.clearTask();
+			const {
+				apiConfiguration,
+				customInstructions,
+				diffEnabled,
+				fuzzyMatchThreshold,
+				slackConfig
+			} = await this.getState();
 
-		this.cline = new Cline(
-			this,
-			apiConfiguration,
-			customInstructions,
-			diffEnabled,
-			fuzzyMatchThreshold,
-			undefined,
-			undefined,
-			historyItem
-		)
+			this.cline = new Cline(
+				this,
+				apiConfiguration,
+				customInstructions,
+				diffEnabled,
+				fuzzyMatchThreshold,
+				undefined,
+				undefined,
+				historyItem,
+				{
+					enabled: slackConfig?.enabled ?? false,
+					webhookUrl: slackConfig?.webhookUrl ?? ""
+				}
+			);
+		} catch (error) {
+			throw new Error(`Failed to initialize Cline with history item: ${error instanceof Error ? error.message : 'Unknown error'}`);
+		}
 	}
 
 	// Send any JSON serializable data to the react app
@@ -656,6 +678,29 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 						setSoundVolume(soundVolume)
 						await this.postStateToWebview()
 						break
+					case "slackNotificationsEnabled":
+						const enabled = message.bool ?? false;
+						try {
+							await this.updateGlobalState("slackNotificationsEnabled", enabled);							
+							// Also update slackConfig to keep settings in sync
+							const currentState = await this.getState();
+							await this.updateGlobalState("slackConfig", {
+								enabled: enabled,
+								webhookUrl: currentState.slackWebhookUrl
+							});
+							await this.postStateToWebview();
+						} catch (error) {
+							vscode.window.showErrorMessage(`Failed to update Slack notifications setting: ${error instanceof Error ? error.message : 'Unknown error'}`);
+						}
+						break
+					case "slackWebhookUrl":
+						await this.updateGlobalState("slackWebhookUrl", message.text ?? "")
+						await this.updateGlobalState("slackConfig", {
+							enabled: (await this.getState()).slackNotificationsEnabled ?? false,
+							webhookUrl: message.text ?? ""
+						})
+						await this.postStateToWebview()
+						break
 					case "diffEnabled":
 						const diffEnabled = message.bool ?? true
 						await this.updateGlobalState("diffEnabled", diffEnabled)
@@ -912,81 +957,102 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 		)
 	}
 
-	private async updateApiConfiguration(apiConfiguration: ApiConfiguration) {
-		const {
-			apiProvider,
-			apiModelId,
-			apiKey,
-			glamaModelId,
-			glamaModelInfo,
-			glamaApiKey,
-			openRouterApiKey,
-			awsAccessKey,
-			awsSecretKey,
-			awsSessionToken,
-			awsRegion,
-			awsUseCrossRegionInference,
-			vertexProjectId,
-			vertexRegion,
-			openAiBaseUrl,
-			openAiApiKey,
-			openAiModelId,
-			ollamaModelId,
-			ollamaBaseUrl,
-			lmStudioModelId,
-			lmStudioBaseUrl,
-			anthropicBaseUrl,
-			geminiApiKey,
-			openAiNativeApiKey,
-			deepSeekApiKey,
-			azureApiVersion,
-			openAiStreamingEnabled,
-			openRouterModelId,
-			openRouterModelInfo,
-			openRouterUseMiddleOutTransform,
-		} = apiConfiguration
-		await this.updateGlobalState("apiProvider", apiProvider)
-		await this.updateGlobalState("apiModelId", apiModelId)
-		await this.storeSecret("apiKey", apiKey)
-		await this.updateGlobalState("glamaModelId", glamaModelId)
-		await this.updateGlobalState("glamaModelInfo", glamaModelInfo)
-		await this.storeSecret("glamaApiKey", glamaApiKey)
-		await this.storeSecret("openRouterApiKey", openRouterApiKey)
-		await this.storeSecret("awsAccessKey", awsAccessKey)
-		await this.storeSecret("awsSecretKey", awsSecretKey)
-		await this.storeSecret("awsSessionToken", awsSessionToken)
-		await this.updateGlobalState("awsRegion", awsRegion)
-		await this.updateGlobalState("awsUseCrossRegionInference", awsUseCrossRegionInference)
-		await this.updateGlobalState("vertexProjectId", vertexProjectId)
-		await this.updateGlobalState("vertexRegion", vertexRegion)
-		await this.updateGlobalState("openAiBaseUrl", openAiBaseUrl)
-		await this.storeSecret("openAiApiKey", openAiApiKey)
-		await this.updateGlobalState("openAiModelId", openAiModelId)
-		await this.updateGlobalState("ollamaModelId", ollamaModelId)
-		await this.updateGlobalState("ollamaBaseUrl", ollamaBaseUrl)
-		await this.updateGlobalState("lmStudioModelId", lmStudioModelId)
-		await this.updateGlobalState("lmStudioBaseUrl", lmStudioBaseUrl)
-		await this.updateGlobalState("anthropicBaseUrl", anthropicBaseUrl)
-		await this.storeSecret("geminiApiKey", geminiApiKey)
-		await this.storeSecret("openAiNativeApiKey", openAiNativeApiKey)
-		await this.storeSecret("deepSeekApiKey", deepSeekApiKey)
-		await this.updateGlobalState("azureApiVersion", azureApiVersion)
-		await this.updateGlobalState("openAiStreamingEnabled", openAiStreamingEnabled)
-		await this.updateGlobalState("openRouterModelId", openRouterModelId)
-		await this.updateGlobalState("openRouterModelInfo", openRouterModelInfo)
-		await this.updateGlobalState("openRouterUseMiddleOutTransform", openRouterUseMiddleOutTransform)
-		if (this.cline) {
-			this.cline.api = buildApiHandler(apiConfiguration)
-		} 
+	private async updateApiConfiguration(apiConfiguration: ApiConfiguration): Promise<void> {
+		try {
+			// Destructure all configuration values
+			const {
+				apiProvider,
+				apiModelId,
+				apiKey,
+				glamaModelId,
+				glamaModelInfo,
+				glamaApiKey,
+				openRouterApiKey,
+				awsAccessKey,
+				awsSecretKey,
+				awsSessionToken,
+				awsRegion,
+				awsUseCrossRegionInference,
+				vertexProjectId,
+				vertexRegion,
+				openAiBaseUrl,
+				openAiApiKey,
+				openAiModelId,
+				ollamaModelId,
+				ollamaBaseUrl,
+				lmStudioModelId,
+				lmStudioBaseUrl,
+				anthropicBaseUrl,
+				geminiApiKey,
+				openAiNativeApiKey,
+				deepSeekApiKey,
+				azureApiVersion,
+				openAiStreamingEnabled,
+				openRouterModelId,
+				openRouterModelInfo,
+				openRouterUseMiddleOutTransform,
+			} = apiConfiguration;
+
+			// Update all state values in parallel for better performance
+			await Promise.all([
+				// Update global state values
+				this.updateGlobalState("apiProvider", apiProvider),
+				this.updateGlobalState("apiModelId", apiModelId),
+				this.updateGlobalState("glamaModelId", glamaModelId),
+				this.updateGlobalState("glamaModelInfo", glamaModelInfo),
+				this.updateGlobalState("awsRegion", awsRegion),
+				this.updateGlobalState("awsUseCrossRegionInference", awsUseCrossRegionInference),
+				this.updateGlobalState("vertexProjectId", vertexProjectId),
+				this.updateGlobalState("vertexRegion", vertexRegion),
+				this.updateGlobalState("openAiBaseUrl", openAiBaseUrl),
+				this.updateGlobalState("openAiModelId", openAiModelId),
+				this.updateGlobalState("ollamaModelId", ollamaModelId),
+				this.updateGlobalState("ollamaBaseUrl", ollamaBaseUrl),
+				this.updateGlobalState("lmStudioModelId", lmStudioModelId),
+				this.updateGlobalState("lmStudioBaseUrl", lmStudioBaseUrl),
+				this.updateGlobalState("anthropicBaseUrl", anthropicBaseUrl),
+				this.updateGlobalState("azureApiVersion", azureApiVersion),
+				this.updateGlobalState("openAiStreamingEnabled", openAiStreamingEnabled),
+				this.updateGlobalState("openRouterModelId", openRouterModelId),
+				this.updateGlobalState("openRouterModelInfo", openRouterModelInfo),
+				this.updateGlobalState("openRouterUseMiddleOutTransform", openRouterUseMiddleOutTransform),
+
+				// Store secrets
+				this.storeSecret("apiKey", apiKey),
+				this.storeSecret("glamaApiKey", glamaApiKey),
+				this.storeSecret("openRouterApiKey", openRouterApiKey),
+				this.storeSecret("awsAccessKey", awsAccessKey),
+				this.storeSecret("awsSecretKey", awsSecretKey),
+				this.storeSecret("awsSessionToken", awsSessionToken),
+				this.storeSecret("openAiApiKey", openAiApiKey),
+				this.storeSecret("geminiApiKey", geminiApiKey),
+				this.storeSecret("openAiNativeApiKey", openAiNativeApiKey),
+				this.storeSecret("deepSeekApiKey", deepSeekApiKey)
+			]);
+
+			// Update Cline instance if it exists
+			if (this.cline) {
+				this.cline.api = buildApiHandler(apiConfiguration);
+			}
+		} catch (error) {
+			throw new Error(`Failed to update API configuration: ${error instanceof Error ? error.message : 'Unknown error'}`);
+		}
 	}
 
-	async updateCustomInstructions(instructions?: string) {
-		// User may be clearing the field
-		await this.updateGlobalState("customInstructions", instructions || undefined)
-		if (this.cline) {
-			this.cline.customInstructions = instructions || undefined
+	async updateCustomInstructions(instructions?: string): Promise<void> {
+		try {
+			// User may be clearing the field
+			const normalizedInstructions = instructions || undefined;
+			await this.updateGlobalState("customInstructions", normalizedInstructions);
+			
+			if (this.cline) {
+				this.cline.customInstructions = normalizedInstructions;
+			}
+			
+			await this.postStateToWebview();
+		} catch (error) {
+			throw new Error(`Failed to update custom instructions: ${error instanceof Error ? error.message : 'Unknown error'}`);
 		}
-		await this.postStateToWebview()
 	}
 
 	// MCP
@@ -1332,12 +1398,12 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			const fileExists = await fileExistsAtPath(apiConversationHistoryFilePath)
 			if (fileExists) {
 				const apiConversationHistory = JSON.parse(await fs.readFile(apiConversationHistoryFilePath, "utf8"))
-				return {
-					historyItem,
-					taskDirPath,
-					apiConversationHistoryFilePath,
-					uiMessagesFilePath,
-					apiConversationHistory,
+			return {
+				historyItem,
+				taskDirPath,
+				apiConversationHistoryFilePath,
+				uiMessagesFilePath,
+				apiConversationHistory,
 				}
 			}
 		}
@@ -1362,15 +1428,15 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 	}
 
 	async deleteTaskWithId(id: string) {
-		if (id === this.cline?.taskId) {
+			if (id === this.cline?.taskId) {
 			await this.clearTask()
-		}
+			}
 
 		const { taskDirPath, apiConversationHistoryFilePath, uiMessagesFilePath } = await this.getTaskWithId(id)
 
 		await this.deleteTaskFromState(id)
 
-		// Delete the task files
+			// Delete the task files
 		const apiConversationHistoryFileExists = await fileExistsAtPath(apiConversationHistoryFilePath)
 		if (apiConversationHistoryFileExists) {
 			await fs.unlink(apiConversationHistoryFilePath)
@@ -1387,12 +1453,12 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 	}
 
 	async deleteTaskFromState(id: string) {
-		// Remove the task from history
+			// Remove the task from history
 		const taskHistory = ((await this.getGlobalState("taskHistory")) as HistoryItem[]) || []
 		const updatedTaskHistory = taskHistory.filter((task) => task.id !== id)
 		await this.updateGlobalState("taskHistory", updatedTaskHistory)
 
-		// Notify the webview that the task has been deleted
+			// Notify the webview that the task has been deleted
 		await this.postStateToWebview()
 	}
 
@@ -1426,6 +1492,8 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			requestDelaySeconds,
 			currentApiConfigName,
 			listApiConfigMeta,
+			slackWebhookUrl,
+			slackNotificationsEnabled,
 		} = await this.getState()
 
 		const allowedCommands = vscode.workspace
@@ -1462,12 +1530,18 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			requestDelaySeconds: requestDelaySeconds ?? 5,
 			currentApiConfigName: currentApiConfigName ?? "default",
 			listApiConfigMeta: listApiConfigMeta ?? [],
+			slackWebhookUrl: slackWebhookUrl ?? "",
+			slackNotificationsEnabled: slackNotificationsEnabled ?? false,
+			slackConfig: {
+				enabled: slackNotificationsEnabled ?? false,
+				webhookUrl: slackWebhookUrl ?? ""
+			},
 		}
 	}
 
 	async clearTask() {
 		this.cline?.abortTask()
-		this.cline = undefined // removes reference to it, so once promises end it will be garbage collected
+			this.cline = undefined // removes reference to it, so once promises end it will be garbage collected
 	}
 
 	// Caching mechanism to keep track of webview messages + API conversation history per provider instance
@@ -1516,7 +1590,38 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 	https://www.eliostruyf.com/devhack-code-extension-storage-options/
 	*/
 
-	async getState() {
+	public async getState(): Promise<{
+		apiConfiguration: ApiConfiguration;
+		lastShownAnnouncementId?: string;
+		customInstructions?: string;
+		alwaysAllowReadOnly: boolean;
+		alwaysAllowWrite: boolean;
+		alwaysAllowExecute: boolean;
+		alwaysAllowBrowser: boolean;
+		alwaysAllowMcp: boolean;
+		taskHistory?: HistoryItem[];
+		allowedCommands?: string[];
+		soundEnabled: boolean;
+		diffEnabled: boolean;
+		soundVolume?: number;
+		browserViewportSize: string;
+		screenshotQuality: number;
+		fuzzyMatchThreshold: number;
+		writeDelayMs: number;
+		terminalOutputLineLimit: number;
+		slackWebhookUrl: string;
+		slackNotificationsEnabled: boolean;
+		slackConfig: {
+			enabled: boolean;
+			webhookUrl: string;
+		};
+		preferredLanguage: string;
+		mcpEnabled: boolean;
+		alwaysApproveResubmit: boolean;
+		requestDelaySeconds: number;
+		currentApiConfigName: string;
+		listApiConfigMeta: ApiConfigMeta[];
+	}> {
 		const [
 			storedApiProvider,
 			apiModelId,
@@ -1571,6 +1676,8 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			requestDelaySeconds,
 			currentApiConfigName,
 			listApiConfigMeta,
+			slackWebhookUrl,
+			slackNotificationsEnabled,
 		] = await Promise.all([
 			this.getGlobalState("apiProvider") as Promise<ApiProvider | undefined>,
 			this.getGlobalState("apiModelId") as Promise<string | undefined>,
@@ -1625,6 +1732,8 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			this.getGlobalState("requestDelaySeconds") as Promise<number | undefined>,
 			this.getGlobalState("currentApiConfigName") as Promise<string | undefined>,
 			this.getGlobalState("listApiConfigMeta") as Promise<ApiConfigMeta[] | undefined>,
+			this.getGlobalState("slackWebhookUrl") as Promise<string | undefined>,
+			this.getGlobalState("slackNotificationsEnabled") as Promise<boolean | undefined>,
 		])
 
 		let apiProvider: ApiProvider
@@ -1691,6 +1800,12 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			fuzzyMatchThreshold: fuzzyMatchThreshold ?? 1.0,
 			writeDelayMs: writeDelayMs ?? 1000,
 			terminalOutputLineLimit: terminalOutputLineLimit ?? 500,
+			slackWebhookUrl: slackWebhookUrl ?? "",
+			slackNotificationsEnabled: slackNotificationsEnabled ?? false,
+			slackConfig: {
+				enabled: slackNotificationsEnabled ?? false,
+				webhookUrl: slackWebhookUrl ?? ""
+			},
 			preferredLanguage: preferredLanguage ?? (() => {
 				// Get VSCode's locale setting
 				const vscodeLang = vscode.env.language;
@@ -1789,25 +1904,25 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 		for (const key of this.context.globalState.keys()) {
 			await this.context.globalState.update(key, undefined)
 		}
-		const secretKeys: SecretKey[] = [
-			"apiKey",
-			"glamaApiKey",
-			"openRouterApiKey",
-			"awsAccessKey",
-			"awsSecretKey",
-			"awsSessionToken",
-			"openAiApiKey",
-			"geminiApiKey",
-			"openAiNativeApiKey",
-			"deepSeekApiKey",
+			const secretKeys: SecretKey[] = [
+				"apiKey",
+				"glamaApiKey",
+				"openRouterApiKey",
+				"awsAccessKey",
+				"awsSecretKey",
+				"awsSessionToken",
+				"openAiApiKey",
+				"geminiApiKey",
+				"openAiNativeApiKey",
+				"deepSeekApiKey",
 		]
 		for (const key of secretKeys) {
 			await this.storeSecret(key, undefined)
 		}
-		if (this.cline) {
+			if (this.cline) {
 			this.cline.abortTask()
 			this.cline = undefined
-		}
+			}
 		vscode.window.showInformationMessage("State reset")
 		await this.postStateToWebview()
 		await this.postMessageToWebview({ type: "action", action: "chatButtonClicked" })

@@ -56,6 +56,8 @@ export interface ExtensionStateContextType extends ExtensionState {
 	setCurrentApiConfigName: (value: string) => void
 	setListApiConfigMeta: (value: ApiConfigMeta[]) => void
 	onUpdateApiConfig: (apiConfig: ApiConfiguration) => void
+	setSlackWebhookUrl: (value: string) => void
+	setSlackNotificationsEnabled: (value: boolean) => void
 }
 
 export const ExtensionStateContext = createContext<ExtensionStateContextType | undefined>(undefined)
@@ -81,6 +83,8 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		requestDelaySeconds: 5,
 		currentApiConfigName: 'default',
 		listApiConfigMeta: [],
+		slackWebhookUrl: "",
+		slackNotificationsEnabled: false,
 	})
 	const [didHydrateState, setDidHydrateState] = useState(false)
 	const [showWelcome, setShowWelcome] = useState(false)
@@ -107,8 +111,8 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		})
 	}, [state])
 
-	const handleMessage = useCallback((event: MessageEvent) => {
-		const message: ExtensionMessage = event.data
+	const handleMessage = useCallback((event: MessageEvent<ExtensionMessage>) => {
+		const message = event.data
 		switch (message.type) {
 			case "state": {
 				setState(message.state!)
@@ -171,6 +175,25 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 				setListApiConfigMeta(message.listApiConfig ?? [])
 				break
 			}
+			case "soundEnabled": {
+				if (message.bool !== undefined) {
+					setState((prevState: ExtensionState) => ({ ...prevState, soundEnabled: message.bool }))
+				}
+				break
+			}
+			case "soundVolume": {
+				if (message.value !== undefined) {
+					setState((prevState: ExtensionState) => ({ ...prevState, soundVolume: message.value }))
+				}
+				break
+			}
+			case "slackWebhookUrl": {
+				if (message.text !== undefined) {
+					setState((prevState: ExtensionState) => ({ ...prevState, slackWebhookUrl: message.text }))
+					vscode.postMessage({ type: "slackWebhookUrl", text: message.text })
+				}
+				break
+			}
 		}
 	}, [setListApiConfigMeta])
 
@@ -194,6 +217,8 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		fuzzyMatchThreshold: state.fuzzyMatchThreshold,
 		writeDelayMs: state.writeDelayMs,
 		screenshotQuality: state.screenshotQuality,
+		slackWebhookUrl: state.slackWebhookUrl,
+		slackNotificationsEnabled: state.slackNotificationsEnabled,
 		setApiConfiguration: (value) => setState((prevState) => ({
 			...prevState,
 			apiConfiguration: value
@@ -220,7 +245,15 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		setRequestDelaySeconds: (value) => setState((prevState) => ({ ...prevState, requestDelaySeconds: value })),
 		setCurrentApiConfigName: (value) => setState((prevState) => ({ ...prevState, currentApiConfigName: value })),
 		setListApiConfigMeta,
-		onUpdateApiConfig
+		onUpdateApiConfig,
+		setSlackWebhookUrl: (value) => {
+			setState((prevState) => ({ ...prevState, slackWebhookUrl: value }))
+			vscode.postMessage({ type: "slackWebhookUrl", text: value })
+		},
+		setSlackNotificationsEnabled: (value) => {
+			setState((prevState) => ({ ...prevState, slackNotificationsEnabled: value }))
+			vscode.postMessage({ type: "slackNotificationsEnabled", bool: value })
+		}
 	}
 
 	return <ExtensionStateContext.Provider value={contextValue}>{children}</ExtensionStateContext.Provider>

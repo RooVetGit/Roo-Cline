@@ -24,7 +24,13 @@ export interface ExtensionMessage {
 		| "enhancedPrompt"
 		| "commitSearchResults"
 		| "listApiConfig"
+		| "soundEnabled"
+		| "soundVolume"
+		| "slackNotificationsEnabled"
+		| "slackWebhookUrl"
 	text?: string
+	bool?: boolean
+	value?: number
 	action?:
 		| "chatButtonClicked"
 		| "mcpButtonClicked"
@@ -59,6 +65,12 @@ export interface ExtensionState {
 	apiConfiguration?: ApiConfiguration
 	currentApiConfigName?: string
 	listApiConfigMeta?: ApiConfigMeta[]
+	slackWebhookUrl?: string
+	slackNotificationsEnabled?: boolean
+	slackConfig?: {
+		webhookUrl: string
+		enabled: boolean
+	}
 	customInstructions?: string
 	alwaysAllowReadOnly?: boolean
 	alwaysAllowWrite?: boolean

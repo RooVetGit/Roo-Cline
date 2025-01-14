@@ -333,7 +333,7 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 				break
 			case "completion_result":
 			case "resume_completed_task":
-				// extension waiting for feedback. but we can just present a new task button
+				vscode.postMessage({ type: "askResponse", askResponse: "yesButtonClicked" })
 				startNewTask()
 				break
 		}

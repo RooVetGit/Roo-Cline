@@ -59,6 +59,10 @@ const SettingsView = ({ onDone }: SettingsViewProps) => {
 		setRequestDelaySeconds,
 		currentApiConfigName,
 		listApiConfigMeta,
+		slackWebhookUrl,
+		setSlackWebhookUrl,
+		slackNotificationsEnabled,
+		setSlackNotificationsEnabled,
 		mode,
 		setMode,
 	} = useExtensionState()
@@ -67,12 +71,16 @@ const SettingsView = ({ onDone }: SettingsViewProps) => {
 	const [commandInput, setCommandInput] = useState("")
 
 	const handleSubmit = () => {
+		console.log('handleSubmit called');
+		console.log('Validating configuration...');
 		const apiValidationResult = validateApiConfiguration(apiConfiguration)
 		const modelIdValidationResult = validateModelId(apiConfiguration, glamaModels, openRouterModels)
 
+		console.log('Validation results:', { apiValidationResult, modelIdValidationResult });
 		setApiErrorMessage(apiValidationResult)
 		setModelIdErrorMessage(modelIdValidationResult)
 		if (!apiValidationResult && !modelIdValidationResult) {
+			console.log('Validation passed, sending messages...');
 			vscode.postMessage({
 				type: "apiConfiguration",
 				apiConfiguration
@@ -97,6 +105,17 @@ const SettingsView = ({ onDone }: SettingsViewProps) => {
 			vscode.postMessage({ type: "alwaysApproveResubmit", bool: alwaysApproveResubmit })
 			vscode.postMessage({ type: "requestDelaySeconds", value: requestDelaySeconds })
 			vscode.postMessage({ type: "currentApiConfigName", text: currentApiConfigName })
+			// Send settings to extension
+			console.log('Sending settings to extension...');
+			console.log('Sound enabled:', soundEnabled);
+			console.log('Sound volume:', soundVolume);
+			console.log('Slack notifications enabled:', slackNotificationsEnabled);
+			console.log('Slack webhook URL:', slackWebhookUrl);
+			
+			vscode.postMessage({ type: "soundEnabled", bool: soundEnabled });
+			vscode.postMessage({ type: "soundVolume", value: soundVolume });
+			vscode.postMessage({ type: "slackNotificationsEnabled", bool: slackNotificationsEnabled });
+			vscode.postMessage({ type: "slackWebhookUrl", text: slackWebhookUrl });
 			vscode.postMessage({
 				type: "upsertApiConfiguration",
 				text: currentApiConfigName,
@@ -160,7 +179,9 @@ const SettingsView = ({ onDone }: SettingsViewProps) => {
 				}}>
 
 				<h3 style={{ color: "var(--vscode-foreground)", margin: 0 }}>Settings</h3>
-				<VSCodeButton onClick={handleSubmit}>Done</VSCodeButton>
+				<VSCodeButton onClick={() => {
+					handleSubmit();
+				}}>Done</VSCodeButton>
 			</div>
 			<div
 				style={{ flexGrow: 1, overflowY: "scroll", paddingRight: 8, display: "flex", flexDirection: "column" }}>
@@ -675,6 +696,41 @@ const SettingsView = ({ onDone }: SettingsViewProps) => {
 								</div>
 							</div>
 						)}
+
+						<div style={{ marginTop: 15 }}>
+							<VSCodeCheckbox checked={slackNotificationsEnabled ?? false} onChange={(e: any) => setSlackNotificationsEnabled(e.target.checked)}>
+								<span style={{ fontWeight: "500" }}>Enable Slack notifications</span>
+							</VSCodeCheckbox>
+							<p style={{
+								fontSize: "12px",
+								marginTop: "5px",
+								color: "var(--vscode-descriptionForeground)",
+							}}>
+								When enabled, Cline will send notifications to Slack for important events.
+							</p>
+
+							{slackNotificationsEnabled && (
+								<div style={{ marginTop: 10 }}>
+									<VSCodeTextField
+										value={slackWebhookUrl}
+										style={{ width: "100%" }}
+										placeholder="https://hooks.slack.com/services/..."
+										onInput={(e: any) => {
+											setSlackWebhookUrl(e.target.value)
+											vscode.postMessage({ type: "slackWebhookUrl", text: e.target.value })
+										}}>
+										<span style={{ fontWeight: "500" }}>Slack Webhook URL</span>
+									</VSCodeTextField>
+									<p style={{
+										fontSize: "12px",
+										marginTop: "5px",
+										color: "var(--vscode-descriptionForeground)",
+									}}>
+										Enter your Slack Incoming Webhook URL to receive notifications.
+									</p>
+								</div>
+							)}
+						</div>
 					</div>
 				</div>
 

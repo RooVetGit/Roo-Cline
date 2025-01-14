@@ -52,6 +52,7 @@ import { detectCodeOmission } from "../integrations/editor/detect-omission"
 import { BrowserSession } from "../services/browser/BrowserSession"
 import { OpenRouterHandler } from "../api/providers/openrouter"
 import { McpHub } from "../services/mcp/McpHub"
+import { setSlackEnabled, setWebhookUrl, notifyTaskComplete, notifyUserInputNeeded, notifyTaskFailed, notifyCommandExecution } from "../services/slack"
 
 const cwd =
 	vscode.workspace.workspaceFolders?.map((folder) => folder.uri.fsPath).at(0) ?? path.join(os.homedir(), "Desktop") // may or may not exist but fs checking existence would immediately ask for permission which would be bad UX, need to come up with a better solution
@@ -97,6 +98,27 @@ export class Cline {
 	private didAlreadyUseTool = false
 	private didCompleteReadingStream = false
 
+	private async notifySlack(type: 'complete' | 'input' | 'fail' | 'command', message: string) {
+		try {
+			switch (type) {
+				case 'complete':
+					await notifyTaskComplete(message);
+					break;
+				case 'input':
+					await notifyUserInputNeeded(message);
+					break;
+				case 'fail':
+					await notifyTaskFailed(message);
+					break;
+				case 'command':
+					await notifyCommandExecution(message);
+					break;
+			}
+		} catch (error) {
+			vscode.window.showErrorMessage(`Failed to send Slack notification: ${error instanceof Error ? error.message : 'Unknown error'}`);
+		}
+	}
+
 	constructor(
 		provider: ClineProvider,
 		apiConfiguration: ApiConfiguration,
@@ -105,13 +127,31 @@ export class Cline {
 		fuzzyMatchThreshold?: number,
 		task?: string | undefined,
 		images?: string[] | undefined,
-		historyItem?: HistoryItem | undefined
+		historyItem?: HistoryItem | undefined,
+		slackConfig?: { enabled: boolean; webhookUrl: string }
 	) {
 		this.providerRef = new WeakRef(provider)
 		this.api = buildApiHandler(apiConfiguration)
 		this.terminalManager = new TerminalManager()
 		this.urlContentFetcher = new UrlContentFetcher(provider.context)
 		this.browserSession = new BrowserSession(provider.context)
+		
+		// Initialize Slack settings
+		setSlackEnabled(slackConfig?.enabled ?? false)
+		setWebhookUrl(slackConfig?.webhookUrl ?? '')
+		
+		// Send initialization notification if enabled
+		if (slackConfig?.enabled && slackConfig?.webhookUrl) {
+			const initMessage = task
+				? `🚀 New task started: ${task}`
+				: historyItem
+					? `📝 Resuming task: ${historyItem.task}`
+					: "🔄 Roo Cline initialized";
+					
+			this.notifySlack('input', initMessage).catch(error => {
+				console.error('Failed to send initialization notification:', error);
+			});
+		}
 		this.diffViewProvider = new DiffViewProvider(cwd)
 		this.customInstructions = customInstructions
 		this.diffEnabled = enableDiff ?? false
@@ -167,7 +207,7 @@ export class Cline {
 			await fs.writeFile(filePath, JSON.stringify(this.apiConversationHistory))
 		} catch (error) {
 			// in the off chance this fails, we don't want to stop the task
-			console.error("Failed to save API conversation history:", error)
+			console.error("Failed to save api conversation history", error)
 		}
 	}
 
@@ -222,7 +262,6 @@ export class Cline {
 				totalCost: apiMetrics.totalCost,
 			})
 		} catch (error) {
-			console.error("Failed to save cline messages:", error)
 		}
 	}
 
@@ -234,6 +273,16 @@ export class Cline {
 		text?: string,
 		partial?: boolean,
 	): Promise<{ response: ClineAskResponse; text?: string; images?: string[] }> {
+		// Send notifications for user input needed or command requests
+		if (!partial && text) {
+			if (type === "followup") {
+				await this.notifySlack('input', text)
+			} else if (type === "command") {
+				// Notify when Cline asks to run a command (when Run Command button appears)
+				await this.notifySlack('command', text)
+			}
+		}
+
 		// If this Cline instance was aborted by the provider, then the only thing keeping us alive is a promise still running in the background, in which case we don't want to send its result to the webview as it is attached to a new instance of Cline now. So we can safely ignore the result of any active promises, and this class will be deallocated. (Although we set Cline = undefined in provider, that simply removes the reference to this instance, but the instance is still alive until this promise resolves or rejects.)
 		if (this.abort) {
 			throw new Error("Cline instance aborted")
@@ -1057,10 +1106,9 @@ export class Cline {
 
 				const handleError = async (action: string, error: Error) => {
 					const errorString = `Error ${action}: ${JSON.stringify(serializeError(error))}`
-					await this.say(
-						"error",
-						`Error ${action}:\n${error.message ?? JSON.stringify(serializeError(error), null, 2)}`,
-					)
+					const errorMessage = `Error ${action}:\n${error.message ?? JSON.stringify(serializeError(error), null, 2)}`
+					await this.say("error", errorMessage)
+					await this.notifySlack('fail', errorMessage)
 					// this.toolResults.push({
 					// 	type: "tool_result",
 					// 	tool_use_id: toolUseId,
@@ -1726,7 +1774,6 @@ export class Cline {
 									break
 								}
 								this.consecutiveMistakeCount = 0
-
 								const didApprove = await askApproval("command", command)
 								if (!didApprove) {
 									break
@@ -2006,11 +2053,7 @@ export class Cline {
 										await this.say("completion_result", result, undefined, false)
 									}
 
-									// complete command message
-									const didApprove = await askApproval("command", command)
-									if (!didApprove) {
-										break
-									}
+									// Execute command from attempt_completion
 									const [userRejected, execCommandResult] = await this.executeCommandTool(command!)
 									if (userRejected) {
 										this.didRejectTool = true
@@ -2021,13 +2064,34 @@ export class Cline {
 									commandResult = execCommandResult
 								} else {
 									await this.say("completion_result", result, undefined, false)
+									await (async () => {
+										try {
+											if (!result) {
+												console.warn("No result provided for completion notification", {
+													taskId: this.taskId,
+													timestamp: new Date().toISOString()
+												});
+											}
+											const completionMessage = result
+												? `✅ Task completed successfully!\n\nResult:\n${result}`
+												: "✅ Task completed successfully!";
+											// Make sure to await the notification
+											await this.notifySlack('complete', completionMessage);
+										} catch (error) {
+											console.error("Error during notifySlack call:", {
+												errorMessage: error instanceof Error ? error.message : 'Unknown error',
+												errorStack: error instanceof Error ? error.stack : 'No stack trace',
+												taskId: this.taskId
+											});
+											vscode.window.showErrorMessage(`Failed to send Slack completion notification: ${error instanceof Error ? error.message : 'Unknown error'}`);
+										}
+									})();
 								}
-
 								// we already sent completion_result says, an empty string asks relinquishes control over button and field
-								const { response, text, images } = await this.ask("completion_result", "", false)
+								const { response, text, images } = await this.ask("completion_result", "", false);
 								if (response === "yesButtonClicked") {
-									pushToolResult("") // signals to recursive loop to stop (for now this never happens since yesButtonClicked will trigger a new task)
-									break
+									pushToolResult(""); //signals to recursive loop to stop (for now this never happens since yesButtonClicked will trigger a new task)
+									break;
 								}
 								await this.say("user_feedback", text ?? "", images)
 
@@ -2191,7 +2255,6 @@ export class Cline {
 					// lastMessage.ts = Date.now() DO NOT update ts since it is used as a key for virtuoso list
 					lastMessage.partial = false
 					// instead of streaming partialMessage events, we do a save and post like normal to persist to disk
-					console.log("updating partial message", lastMessage)
 					// await this.saveClineMessages()
 				}
 
@@ -2258,7 +2321,6 @@ export class Cline {
 					}
 
 					if (this.abort) {
-						console.log("aborting stream...")
 						if (!this.abandoned) {
 							// only need to gracefully abort if this instance isn't abandoned (sometimes openrouter stream hangs, in which case this would affect future instances of cline)
 							await abortStream("user_cancelled")

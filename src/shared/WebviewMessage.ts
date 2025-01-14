@@ -42,6 +42,8 @@ export interface WebviewMessage {
 		| "soundEnabled"
 		| "soundVolume"
 		| "diffEnabled"
+		| "slackNotificationsEnabled"
+		| "slackWebhookUrl"
 		| "browserViewportSize"
 		| "screenshotQuality"
 		| "openMcpSettings"

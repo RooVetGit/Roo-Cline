@@ -111,7 +111,7 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 	private cline?: Cline
 	private workspaceTracker?: WorkspaceTracker
 	mcpHub?: McpHub
-	private latestAnnouncementId = "dec-10-2024" // update to some unique identifier when we add a new announcement
+	private latestAnnouncementId = "3.0.0" // updated by changeset workflow
 	configManager: ConfigManager
 
 	constructor(
@@ -1504,7 +1504,7 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 				.sort((a, b) => b.ts - a.ts),
 			soundEnabled: soundEnabled ?? false,
 			diffEnabled: diffEnabled ?? true,
-			shouldShowAnnouncement: false, // lastShownAnnouncementId !== this.latestAnnouncementId,
+			shouldShowAnnouncement: lastShownAnnouncementId !== this.latestAnnouncementId,
 			allowedCommands,
 			soundVolume: soundVolume ?? 0.5,
 			browserViewportSize: browserViewportSize ?? "900x600",

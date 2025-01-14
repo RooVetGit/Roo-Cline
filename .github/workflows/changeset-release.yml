@@ -58,7 +58,6 @@ jobs:
 
   # Job 2: Process version bump PR created by R00-B0T
   changeset-pr-edit-approve:
-    name: Auto approve and merge Bump version PRs
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -100,6 +99,20 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           PREV_VERSION=$(git show origin/main:package.json | jq -r '.version')
           echo "prev_version=$PREV_VERSION" >> $GITHUB_OUTPUT
+          
+          # Extract major and minor versions for comparison
+          CURR_MAJOR=$(echo $VERSION | cut -d. -f1)
+          CURR_MINOR=$(echo $VERSION | cut -d. -f2)
+          PREV_MAJOR=$(echo $PREV_VERSION | cut -d. -f1)
+          PREV_MINOR=$(echo $PREV_VERSION | cut -d. -f2)
+          
+          # Set flag if major or minor version changed
+          if [ "$CURR_MAJOR" != "$PREV_MAJOR" ] || [ "$CURR_MINOR" != "$PREV_MINOR" ]; then
+            echo "is_major_minor_change=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_major_minor_change=false" >> $GITHUB_OUTPUT
+          fi
+          
           echo "version=$VERSION"
           echo "prev_version=$PREV_VERSION"
 
@@ -111,15 +124,33 @@ jobs:
           PREV_VERSION: ${{ steps.get_version.outputs.prev_version }}
         run: python .github/scripts/overwrite_changeset_changelog.py
 
-      # Commit and push changelog updates
-      - name: Push Changelog updates
+      - name: NPM Install
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'changelog-ready') }}
+        run: npm install
+
+      # Update announcement with latest changelog entry (only for major/minor version changes)
+      - name: Update Announcement
+        if: |
+          !contains(github.event.pull_request.labels.*.name, 'changelog-ready') &&
+          steps.get_version.outputs.is_major_minor_change == 'true'
+        env:
+          VERSION: ${{ steps.get_version.outputs.version }}
+        run: |
+          node .github/scripts/update-announcement.js
+          python .github/scripts/update-announcement-id.py
+          npx prettier --config .prettierrc.json 'webview-ui/src/components/chat/Announcement.tsx' --write
+
+      # Commit and push changelog and announcement updates
+      - name: Push updates
         if: ${{ !contains(github.event.pull_request.labels.*.name, 'changelog-ready') }}
         run: |
           git config user.name "R00-B0T"
           git config user.email github-actions@github.com
           echo "Running git add and commit..."
           git add CHANGELOG.md
-          git commit -m "Updating CHANGELOG.md format"
+          git add webview-ui/src/components/chat/Announcement.tsx
+          git add src/core/webview/ClineProvider.ts
+          git commit -m "Update CHANGELOG.md and announcement files"
           git status
           echo "--------------------------------------------------------------------------------"
           echo "Pushing to remote..."

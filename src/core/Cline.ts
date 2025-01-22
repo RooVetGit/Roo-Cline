@@ -179,7 +179,7 @@ export class Cline {
 
 		if (typeof conversationSaveFolder === "string" && conversationSaveFolder.length > 0) {
 			console.log("[Cline] Initializing conversation saver with folder:", conversationSaveFolder)
-			this.conversationSaver = new ConversationSaver(conversationSaveFolder)
+			this.conversationSaver = new ConversationSaver(conversationSaveFolder, cwd)
 			// Verify folder can be created
 			await this.conversationSaver.saveConversation([])
 			console.log("[Cline] Successfully initialized conversation saver")
@@ -199,7 +199,7 @@ export class Cline {
 		// Update conversation saver instance
 		if (typeof folder === "string" && folder.length > 0) {
 			if (!this.conversationSaver) {
-				this.conversationSaver = new ConversationSaver(folder)
+				this.conversationSaver = new ConversationSaver(folder, cwd)
 			} else {
 				this.conversationSaver.updateSaveFolder(folder)
 			}

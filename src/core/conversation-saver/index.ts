@@ -6,8 +6,11 @@ export class ConversationSaver {
 	private saveFolder: string
 	private currentFilePath?: string
 
-	constructor(saveFolder: string) {
-		this.saveFolder = saveFolder
+	constructor(
+		saveFolder: string,
+		private workspaceRoot?: string,
+	) {
+		this.saveFolder = workspaceRoot ? path.resolve(workspaceRoot, saveFolder) : saveFolder
 	}
 
 	private formatMessagesAsMarkdown(messages: ClineMessage[]): string {
@@ -150,7 +153,7 @@ export class ConversationSaver {
 	 * @param newPath The new save folder path
 	 */
 	updateSaveFolder(newPath: string) {
-		this.saveFolder = newPath
+		this.saveFolder = this.workspaceRoot ? path.resolve(this.workspaceRoot, newPath) : newPath
 		// Reset current file path since we're changing folders
 		this.currentFilePath = undefined
 	}

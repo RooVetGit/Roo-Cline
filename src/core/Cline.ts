@@ -72,7 +72,24 @@ type UserContent = Array<
 
 export class Cline {
 	readonly taskId: string
-	api: ApiHandler
+	private _api: ApiHandler
+	private _apiProvider: string = "anthropic" // Default to anthropic as fallback
+
+	get api(): ApiHandler {
+		return this._api
+	}
+
+	set api(newApi: ApiHandler) {
+		this._api = newApi
+	}
+
+	get apiProvider(): string {
+		return this._apiProvider
+	}
+
+	set apiProvider(provider: string) {
+		this._apiProvider = provider
+	}
 	private terminalManager: TerminalManager
 	private urlContentFetcher: UrlContentFetcher
 	private browserSession: BrowserSession
@@ -119,12 +136,15 @@ export class Cline {
 		historyItem?: HistoryItem | undefined,
 		experimentalDiffStrategy: boolean = false,
 	) {
+		this._api = buildApiHandler(apiConfiguration)
+		this._apiProvider = apiConfiguration.apiProvider ?? "anthropic"
 		if (!task && !images && !historyItem) {
 			throw new Error("Either historyItem or task/images must be provided")
 		}
 
 		this.taskId = crypto.randomUUID()
 		this.api = buildApiHandler(apiConfiguration)
+		this.apiProvider = apiConfiguration.apiProvider ?? "anthropic"
 		this.terminalManager = new TerminalManager()
 		this.urlContentFetcher = new UrlContentFetcher(provider.context)
 		this.browserSession = new BrowserSession(provider.context)
@@ -2256,11 +2276,18 @@ export class Cline {
 
 		// getting verbose details is an expensive operation, it uses globby to top-down build file structure of project which for large projects can take a few seconds
 		// for the best UX we show a placeholder api_req_started message with a loading spinner as this happens
+		const model = this.api.getModel()
+		const apiInfo = {
+			provider: this.apiProvider,
+			model: model.id,
+		}
+
 		await this.say(
 			"api_req_started",
 			JSON.stringify({
 				request:
 					userContent.map((block) => formatContentBlockToMarkdown(block)).join("\n\n") + "\n\nLoading...",
+				...apiInfo,
 			}),
 		)
 
@@ -2275,6 +2302,7 @@ export class Cline {
 		const lastApiReqIndex = findLastIndex(this.clineMessages, (m) => m.say === "api_req_started")
 		this.clineMessages[lastApiReqIndex].text = JSON.stringify({
 			request: userContent.map((block) => formatContentBlockToMarkdown(block)).join("\n\n"),
+			...apiInfo,
 		} satisfies ClineApiReqInfo)
 		await this.saveClineMessages()
 		await this.providerRef.deref()?.postStateToWebview()
@@ -2290,6 +2318,11 @@ export class Cline {
 			// fortunately api_req_finished was always parsed out for the gui anyways, so it remains solely for legacy purposes to keep track of prices in tasks from history
 			// (it's worth removing a few months from now)
 			const updateApiReqMsg = (cancelReason?: ClineApiReqCancelReason, streamingFailedMessage?: string) => {
+				const model = this.api.getModel()
+				const apiInfo = {
+					provider: this.apiProvider,
+					model: model.id,
+				}
 				this.clineMessages[lastApiReqIndex].text = JSON.stringify({
 					...JSON.parse(this.clineMessages[lastApiReqIndex].text || "{}"),
 					tokensIn: inputTokens,
@@ -2298,15 +2331,10 @@ export class Cline {
 					cacheReads: cacheReadTokens,
 					cost:
 						totalCost ??
-						calculateApiCost(
-							this.api.getModel().info,
-							inputTokens,
-							outputTokens,
-							cacheWriteTokens,
-							cacheReadTokens,
-						),
+						calculateApiCost(model.info, inputTokens, outputTokens, cacheWriteTokens, cacheReadTokens),
 					cancelReason,
 					streamingFailedMessage,
+					...apiInfo,
 				} satisfies ClineApiReqInfo)
 			}
 

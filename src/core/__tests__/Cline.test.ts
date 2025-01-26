@@ -150,6 +150,10 @@ jest.mock("vscode", () => {
 				stat: jest.fn().mockResolvedValue({ type: 1 }), // FileType.File = 1
 			},
 			onDidSaveTextDocument: jest.fn(() => mockDisposable),
+			getConfiguration: jest.fn().mockImplementation((section) => ({
+				get: jest.fn().mockReturnValue(undefined),
+				update: jest.fn().mockResolvedValue(undefined),
+			})),
 		},
 		env: {
 			uriScheme: "vscode",

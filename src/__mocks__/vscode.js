@@ -8,6 +8,10 @@ const vscode = {
 	},
 	workspace: {
 		onDidSaveTextDocument: jest.fn(),
+		getConfiguration: jest.fn().mockImplementation((section) => ({
+			get: jest.fn().mockReturnValue(undefined),
+			update: jest.fn().mockResolvedValue(undefined),
+		})),
 	},
 	Disposable: class {
 		dispose() {}

@@ -64,6 +64,8 @@ export interface ExtensionStateContextType extends ExtensionState {
 	setExperimentalDiffStrategy: (value: boolean) => void
 	autoApprovalEnabled?: boolean
 	setAutoApprovalEnabled: (value: boolean) => void
+	conversationSaveFolder?: string
+	setConversationSaveFolder: (value: string | undefined) => void
 	handleInputChange: (field: keyof ApiConfiguration) => (event: any) => void
 	customModes: ModeConfig[]
 	setCustomModes: (value: ModeConfig[]) => void
@@ -97,6 +99,7 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		enhancementApiConfigId: "",
 		experimentalDiffStrategy: false,
 		autoApprovalEnabled: false,
+		conversationSaveFolder: undefined,
 		customModes: [],
 	})
 
@@ -276,6 +279,8 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		setExperimentalDiffStrategy: (value) =>
 			setState((prevState) => ({ ...prevState, experimentalDiffStrategy: value })),
 		setAutoApprovalEnabled: (value) => setState((prevState) => ({ ...prevState, autoApprovalEnabled: value })),
+		setConversationSaveFolder: (value) =>
+			setState((prevState) => ({ ...prevState, conversationSaveFolder: value })),
 		handleInputChange,
 		setCustomModes: (value) => setState((prevState) => ({ ...prevState, customModes: value })),
 	}

@@ -20,19 +20,43 @@ let outputChannel: vscode.OutputChannel
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
 	outputChannel = vscode.window.createOutputChannel("Roo-Code")
 	context.subscriptions.push(outputChannel)
 
 	outputChannel.appendLine("Roo-Code extension activated")
 
-	// Get default commands from configuration
-	const defaultCommands = vscode.workspace.getConfiguration("roo-cline").get<string[]>("allowedCommands") || []
+	// Get default settings from configuration
+	const config = vscode.workspace.getConfiguration("roo-cline")
+	const defaultCommands = config.get<string[]>("allowedCommands") || []
+	const conversationSaveFolder = config.get<string>("conversationSaveFolder")
 
 	// Initialize global state if not already set
 	if (!context.globalState.get("allowedCommands")) {
 		context.globalState.update("allowedCommands", defaultCommands)
 	}
+	if (!context.globalState.get("conversationSaveFolder") && conversationSaveFolder) {
+		context.globalState.update("conversationSaveFolder", conversationSaveFolder)
+	}
+
+	// Log configuration for debugging
+	outputChannel.appendLine(`Conversation save folder configured as: ${conversationSaveFolder || "(not set)"}`)
+
+	// Listen for settings changes
+	context.subscriptions.push(
+		vscode.workspace.onDidChangeConfiguration(async (e) => {
+			if (e.affectsConfiguration("roo-cline.conversationSaveFolder")) {
+				const newFolder = vscode.workspace.getConfiguration("roo-cline").get<string>("conversationSaveFolder")
+				await context.globalState.update("conversationSaveFolder", newFolder)
+				outputChannel.appendLine(`Conversation save folder updated to: ${newFolder || "(not set)"}`)
+
+				// Update any active Cline instances
+				for (const provider of ClineProvider.getActiveInstances()) {
+					await provider.updateConversationSaveFolder(newFolder)
+				}
+			}
+		}),
+	)
 
 	const sidebarProvider = new ClineProvider(context, outputChannel)
 

@@ -5,6 +5,12 @@ const vscode = {
 		createTextEditorDecorationType: jest.fn().mockReturnValue({
 			dispose: jest.fn(),
 		}),
+		createWebviewPanel: jest.fn().mockReturnValue({
+			webview: {
+				options: {},
+			},
+			dispose: jest.fn(),
+		}),
 	},
 	workspace: {
 		onDidSaveTextDocument: jest.fn(),
@@ -52,6 +58,61 @@ const vscode = {
 			this.id = id
 		}
 	},
+	ViewColumn: {
+		One: 1,
+		Two: 2,
+		Three: 3,
+	},
+	extensions: {},
+	commands: {
+		getCommands: jest
+			.fn()
+			.mockResolvedValue([
+				"roo-cline.plusButtonClicked",
+				"roo-cline.mcpButtonClicked",
+				"roo-cline.historyButtonClicked",
+				"roo-cline.popoutButtonClicked",
+				"roo-cline.settingsButtonClicked",
+				"roo-cline.openInNewTab",
+				"roo-cline.explainCode",
+				"roo-cline.fixCode",
+				"roo-cline.improveCode",
+			]),
+	},
 }
+
+// Create mock extension after vscode object is defined
+const mockExtension = {
+	id: "RooVeterinaryInc.roo-cline",
+	extensionUri: vscode.Uri.file("/test/extension/path"),
+	isActive: true,
+	exports: {
+		sidebarProvider: {
+			updateGlobalState: jest.fn().mockResolvedValue(undefined),
+			storeSecret: jest.fn().mockResolvedValue(undefined),
+			readOpenRouterModels: jest.fn().mockResolvedValue({
+				"anthropic/claude-3.5-sonnet:beta": {},
+				"anthropic/claude-3-sonnet:beta": {},
+				"anthropic/claude-3.5-sonnet": {},
+				"anthropic/claude-3.5-sonnet-20240620": {},
+				"anthropic/claude-3.5-sonnet-20240620:beta": {},
+				"anthropic/claude-3.5-haiku:beta": {},
+			}),
+			refreshOpenRouterModels: jest.fn().mockResolvedValue(undefined),
+			getState: jest.fn().mockResolvedValue({ taskHistory: [] }),
+			resolveWebviewView: jest.fn(),
+			postMessageToWebview: jest.fn(),
+		},
+		startNewTask: jest.fn().mockResolvedValue(undefined),
+	},
+	activate: jest.fn(),
+}
+
+// Set up extension activation to return exports
+mockExtension.activate.mockResolvedValue(mockExtension.exports)
+
+vscode.extensions.getExtension = jest
+	.fn()
+	.mockImplementation((id) => (id === mockExtension.id ? mockExtension : undefined))
 
 module.exports = vscode

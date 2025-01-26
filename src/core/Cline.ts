@@ -750,8 +750,10 @@ export class Cline {
 			completed = true
 		})
 
-		process.once("no_shell_integration", async () => {
-			await this.say("shell_integration_warning")
+		process.once("no_shell_integration", () => {
+			this.say("shell_integration_warning").catch((error) => {
+				console.error("Error in shell integration warning:", error)
+			})
 		})
 
 		await process
@@ -2529,7 +2531,7 @@ export class Cline {
 	}
 
 	async loadContext(userContent: UserContent, includeFileDetails: boolean = false) {
-		return await Promise.all([
+		return Promise.all([
 			// Process userContent array, which contains various block types:
 			// TextBlockParam, ImageBlockParam, ToolUseBlockParam, and ToolResultBlockParam.
 			// We need to apply parseMentions() to:

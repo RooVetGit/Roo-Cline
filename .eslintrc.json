@@ -3,22 +3,24 @@
 	"parser": "@typescript-eslint/parser",
 	"parserOptions": {
 		"ecmaVersion": 6,
-		"sourceType": "module"
+		"sourceType": "module",
+		"project": "./tsconfig.json"
 	},
 	"plugins": ["@typescript-eslint"],
 	"rules": {
-		"@typescript-eslint/naming-convention": [
-			"warn",
-			{
-				"selector": "import",
-				"format": ["camelCase", "PascalCase"]
-			}
-		],
+		"no-var": "error",
+		"no-unused-vars": "off",
+		"@typescript-eslint/no-unused-vars": "warn",
+		"@typescript-eslint/no-explicit-any": "warn",
+		"@typescript-eslint/no-misused-promises": "error",
+		"@typescript-eslint/await-thenable": "warn",
+		"@typescript-eslint/return-await": "error",
+		"@typescript-eslint/explicit-function-return-type": "warn",
 		"@typescript-eslint/semi": "off",
 		"eqeqeq": "warn",
 		"no-throw-literal": "warn",
 		"semi": "off",
 		"react-hooks/exhaustive-deps": "off"
 	},
-	"ignorePatterns": ["out", "dist", "**/*.d.ts"]
+	"ignorePatterns": ["out", "dist", "**/*.d.ts", "jest.*.js"]
 }

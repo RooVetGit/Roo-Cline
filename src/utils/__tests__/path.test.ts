@@ -28,6 +28,38 @@ describe("Path Utilities", () => {
 		})
 	})
 
+	describe("platform-specific behavior", () => {
+		const platforms = ["win32", "darwin", "linux"]
+		platforms.forEach((platform) => {
+			describe(`on ${platform}`, () => {
+				beforeEach(() => {
+					Object.defineProperty(process, "platform", { value: platform })
+				})
+
+				it("should handle root paths correctly", () => {
+					const root = platform === "win32" ? "C:\\" : "/"
+					expect(arePathsEqual(root, root + "/")).toBe(true)
+					expect(arePathsEqual(root, root + "//")).toBe(true)
+				})
+
+				it("should normalize mixed separators", () => {
+					const mixedPath =
+						platform === "win32" ? "C:\\Users/test\\path/file.txt" : "/Users/test\\path/file.txt"
+					const normalPath =
+						platform === "win32" ? "C:\\Users\\test\\path\\file.txt" : "/Users/test/path/file.txt"
+					expect(arePathsEqual(mixedPath, normalPath)).toBe(true)
+				})
+
+				it("should handle parent directory traversal", () => {
+					const base = platform === "win32" ? "C:\\Users\\test" : "/Users/test"
+					const path1 = path.join(base, "dir", "..", "file.txt")
+					const path2 = path.join(base, "file.txt")
+					expect(arePathsEqual(path1, path2)).toBe(true)
+				})
+			})
+		})
+	})
+
 	describe("arePathsEqual", () => {
 		describe("on Windows", () => {
 			beforeEach(() => {
@@ -75,6 +107,64 @@ describe("Path Utilities", () => {
 			})
 		})
 
+		describe("Windows-specific paths", () => {
+			beforeEach(() => {
+				Object.defineProperty(process, "platform", { value: "win32" })
+			})
+
+			it("should handle drive letter case variations", () => {
+				expect(arePathsEqual("C:\\Users\\test", "c:\\users\\test")).toBe(true)
+				expect(arePathsEqual("D:\\Files\\test", "d:\\files\\test")).toBe(true)
+			})
+
+			it("should handle UNC paths", () => {
+				expect(arePathsEqual("\\\\server\\share\\folder", "\\\\SERVER\\share\\folder")).toBe(true)
+				expect(arePathsEqual("\\\\server\\share\\folder\\", "\\\\server\\share\\folder")).toBe(true)
+			})
+
+			it("should handle extended-length paths", () => {
+				const path1 = "\\\\?\\C:\\Very\\Long\\Path"
+				const path2 = "\\\\?\\C:\\Very\\Long\\Path\\"
+				expect(arePathsEqual(path1, path2)).toBe(true)
+			})
+
+			it("should handle network drive paths", () => {
+				expect(arePathsEqual("Z:\\Shared\\Files", "z:\\shared\\files")).toBe(true)
+			})
+		})
+
+		describe("path segment variations", () => {
+			const platforms = ["win32", "darwin", "linux"]
+			platforms.forEach((platform) => {
+				describe(`on ${platform}`, () => {
+					beforeEach(() => {
+						Object.defineProperty(process, "platform", { value: platform })
+					})
+
+					it("should handle consecutive separators", () => {
+						const base = platform === "win32" ? "C:" : ""
+						const path1 = `${base}//home///user////file.txt`
+						const path2 = `${base}/home/user/file.txt`
+						expect(arePathsEqual(path1, path2)).toBe(true)
+					})
+
+					it("should handle current directory references", () => {
+						const base = platform === "win32" ? "C:" : ""
+						const path1 = `${base}/./home/./user/./file.txt`
+						const path2 = `${base}/home/user/file.txt`
+						expect(arePathsEqual(path1, path2)).toBe(true)
+					})
+
+					it("should handle complex parent directory traversal", () => {
+						const base = platform === "win32" ? "C:" : ""
+						const path1 = `${base}/a/b/c/../../d/../e/f/../g`
+						const path2 = `${base}/a/e/g`
+						expect(arePathsEqual(path1, path2)).toBe(true)
+					})
+				})
+			})
+		})
+
 		describe("edge cases", () => {
 			it("should handle undefined paths", () => {
 				expect(arePathsEqual(undefined, undefined)).toBe(true)
@@ -93,42 +183,48 @@ describe("Path Utilities", () => {
 		const homeDir = os.homedir()
 		const desktop = path.join(homeDir, "Desktop")
 
+		// Helper function to create platform-specific paths
+		const createPath = (...segments: string[]) => {
+			return path.join(...segments).toPosix()
+		}
+
 		it("should return basename when path equals cwd", () => {
-			const cwd = "/Users/test/project"
+			const cwd = createPath("C:", "Users", "test", "project")
 			expect(getReadablePath(cwd, cwd)).toBe("project")
 		})
 
 		it("should return relative path when inside cwd", () => {
-			const cwd = "/Users/test/project"
-			const filePath = "/Users/test/project/src/file.txt"
+			const cwd = createPath("C:", "Users", "test", "project")
+			const filePath = createPath("C:", "Users", "test", "project", "src", "file.txt")
 			expect(getReadablePath(cwd, filePath)).toBe("src/file.txt")
 		})
 
 		it("should return absolute path when outside cwd", () => {
-			const cwd = "/Users/test/project"
-			const filePath = "/Users/test/other/file.txt"
-			expect(getReadablePath(cwd, filePath)).toBe("/Users/test/other/file.txt")
+			const cwd = createPath("C:", "Users", "test", "project")
+			const filePath = createPath("C:", "Users", "test", "other", "file.txt")
+			expect(getReadablePath(cwd, filePath)).toBe(filePath)
 		})
 
 		it("should handle Desktop as cwd", () => {
 			const filePath = path.join(desktop, "file.txt")
-			expect(getReadablePath(desktop, filePath)).toBe(filePath.toPosix())
+			expect(getReadablePath(desktop, filePath)).toBe(createPath(filePath))
 		})
 
 		it("should handle undefined relative path", () => {
-			const cwd = "/Users/test/project"
+			const cwd = createPath("C:", "Users", "test", "project")
 			expect(getReadablePath(cwd)).toBe("project")
 		})
 
 		it("should handle parent directory traversal", () => {
-			const cwd = "/Users/test/project"
+			const cwd = createPath("C:", "Users", "test", "project")
 			const filePath = "../../other/file.txt"
-			expect(getReadablePath(cwd, filePath)).toBe("/Users/other/file.txt")
+			const expected = createPath("C:", "Users", "other", "file.txt")
+			expect(getReadablePath(cwd, filePath)).toBe(expected)
 		})
 
 		it("should normalize paths with redundant segments", () => {
-			const cwd = "/Users/test/project"
-			const filePath = "/Users/test/project/./src/../src/file.txt"
+			const cwd = createPath("C:", "Users", "test", "project")
+			const filePath = createPath("C:", "Users", "test", "project", ".", "src", "..", "src", "file.txt")
 			expect(getReadablePath(cwd, filePath)).toBe("src/file.txt")
 		})
 	})

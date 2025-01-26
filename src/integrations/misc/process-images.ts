@@ -17,7 +17,7 @@ export async function selectImages(): Promise<string[]> {
 		return []
 	}
 
-	return await Promise.all(
+	return Promise.all(
 		fileUris.map(async (uri) => {
 			const imagePath = uri.fsPath
 			const buffer = await fs.readFile(imagePath)

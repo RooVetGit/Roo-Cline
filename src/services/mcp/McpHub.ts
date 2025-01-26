@@ -90,7 +90,7 @@ export class McpHub {
 				mcpSettingsFilePath,
 				`{
   "mcpServers": {
-    
+
   }
 }`,
 			)
@@ -106,7 +106,7 @@ export class McpHub {
 					const content = await fs.readFile(settingsPath, "utf-8")
 					const errorMessage =
 						"Invalid MCP settings format. Please ensure your settings follow the correct JSON format."
-					let config: any
+					let config: z.infer<typeof McpSettingsSchema>
 					try {
 						config = JSON.parse(content)
 					} catch (error) {
@@ -166,22 +166,22 @@ export class McpHub {
 				stderr: "pipe", // necessary for stderr to be available
 			})
 
-			transport.onerror = async (error) => {
+			transport.onerror = (error): void => {
 				console.error(`Transport error for "${name}":`, error)
 				const connection = this.connections.find((conn) => conn.server.name === name)
 				if (connection) {
 					connection.server.status = "disconnected"
 					this.appendErrorMessage(connection, error.message)
 				}
-				await this.notifyWebviewOfServerChanges()
+				void this.notifyWebviewOfServerChanges()
 			}
 
-			transport.onclose = async () => {
+			transport.onclose = (): void => {
 				const connection = this.connections.find((conn) => conn.server.name === name)
 				if (connection) {
 					connection.server.status = "disconnected"
 				}
-				await this.notifyWebviewOfServerChanges()
+				void this.notifyWebviewOfServerChanges()
 			}
 
 			// If the config is invalid, show an error
@@ -220,7 +220,7 @@ export class McpHub {
 			await transport.start()
 			const stderrStream = transport.stderr
 			if (stderrStream) {
-				stderrStream.on("data", async (data: Buffer) => {
+				stderrStream.on("data", (data: Buffer): void => {
 					const errorOutput = data.toString()
 					console.error(`Server "${name}" stderr:`, errorOutput)
 					const connection = this.connections.find((conn) => conn.server.name === name)
@@ -229,14 +229,14 @@ export class McpHub {
 						this.appendErrorMessage(connection, errorOutput)
 						// Only need to update webview right away if it's already disconnected
 						if (connection.server.status === "disconnected") {
-							await this.notifyWebviewOfServerChanges()
+							void this.notifyWebviewOfServerChanges()
 						}
 					}
 				})
 			} else {
 				console.error(`No stderr stream for ${name}`)
 			}
-			transport.start = async () => {} // No-op now, .connect() won't fail
+			transport.start = async (): Promise<void> => {} // No-op now, .connect() won't fail
 
 			// // Set up notification handlers
 			// client.setNotificationHandler(
@@ -280,7 +280,7 @@ export class McpHub {
 		}
 	}
 
-	private appendErrorMessage(connection: McpConnection, error: string) {
+	private appendErrorMessage(connection: McpConnection, error: string): void {
 		const newError = connection.server.error ? `${connection.server.error}\n${error}` : error
 		connection.server.error = newError //.slice(0, 800)
 	}
@@ -352,7 +352,7 @@ export class McpHub {
 		}
 	}
 
-	async updateServerConnections(newServers: Record<string, any>): Promise<void> {
+	async updateServerConnections(newServers: Record<string, StdioServerParameters>): Promise<void> {
 		this.isConnecting = true
 		this.removeAllFileWatchers()
 		const currentNames = new Set(this.connections.map((conn) => conn.server.name))
@@ -395,7 +395,7 @@ export class McpHub {
 		this.isConnecting = false
 	}
 
-	private setupFileWatcher(name: string, config: any) {
+	private setupFileWatcher(name: string, config: StdioServerParameters): void {
 		const filePath = config.args?.find((arg: string) => arg.includes("build/index.js"))
 		if (filePath) {
 			// we use chokidar instead of onDidSaveTextDocument because it doesn't require the file to be open in the editor. The settings config is better suited for onDidSave since that will be manually updated by the user or Cline (and we want to detect save events, not every file change)
@@ -405,17 +405,19 @@ export class McpHub {
 				// awaitWriteFinish: true, // This helps with atomic writes
 			})
 
-			watcher.on("change", () => {
+			watcher.on("change", (): void => {
 				console.log(`Detected change in ${filePath}. Restarting server ${name}...`)
-				this.restartConnection(name)
+				void this.restartConnection(name)
 			})
 
 			this.fileWatchers.set(name, watcher)
 		}
 	}
 
-	private removeAllFileWatchers() {
-		this.fileWatchers.forEach((watcher) => watcher.close())
+	private removeAllFileWatchers(): void {
+		this.fileWatchers.forEach((watcher): void => {
+			void watcher.close()
+		})
 		this.fileWatchers.clear()
 	}
 
@@ -553,7 +555,7 @@ export class McpHub {
 		if (connection.server.disabled) {
 			throw new Error(`Server "${serverName}" is disabled`)
 		}
-		return await connection.client.request(
+		return connection.client.request(
 			{
 				method: "resources/read",
 				params: {
@@ -579,7 +581,7 @@ export class McpHub {
 			throw new Error(`Server "${serverName}" is disabled and cannot be used`)
 		}
 
-		return await connection.client.request(
+		return connection.client.request(
 			{
 				method: "tools/call",
 				params: {

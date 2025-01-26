@@ -36,22 +36,7 @@ module.exports = {
 	],
 	modulePathIgnorePatterns: [".vscode-test"],
 	rootDir: ".",
-	verbose: false,
-	silent: true,
-	noStackTrace: true,
-	reporters: [
-		[
-			"jest-silent-reporter",
-			{
-				useDots: false,
-				showPaths: true,
-				showWarnings: false,
-				showFailures: true,
-				showFailuresSummary: false,
-				showInlineStatus: false,
-			},
-		],
-		"<rootDir>/jest-custom-reporter.js",
-	],
+	verbose: true,
+	silent: false,
 	setupFiles: ["<rootDir>/jest.setup.js"],
 }

@@ -161,20 +161,7 @@ const mockFs = {
 
 	// Helper to set up initial mock data
 	_setInitialMockData: () => {
-		// Set up default MCP settings
-		mockFiles.set(
-			"/mock/settings/path/cline_mcp_settings.json",
-			JSON.stringify({
-				mcpServers: {
-					"test-server": {
-						command: "node",
-						args: ["test.js"],
-						disabled: false,
-						alwaysAllow: ["existing-tool"],
-					},
-				},
-			}),
-		)
+		mockFiles.set("/mock/settings/path/cline_mcp_settings.json", JSON.stringify({ mcpServers: {} }))
 
 		// Ensure all base directories exist
 		baseTestDirs.forEach((dir) => {
@@ -188,8 +175,5 @@ const mockFs = {
 		})
 	},
 }
-
-// Initialize mock data
-mockFs._setInitialMockData()
 
 module.exports = mockFs

@@ -68,14 +68,45 @@ export function arePathsEqual(path1?: string, path2?: string): boolean {
 }
 
 function normalizePath(p: string): string {
-	// normalize resolve ./.. segments, removes duplicate slashes, and standardizes path separators
-	let normalized = path.normalize(p)
-	// however it doesn't remove trailing slashes
-	// remove trailing slash, except for root paths
-	if (normalized.length > 1 && (normalized.endsWith("/") || normalized.endsWith("\\"))) {
-		normalized = normalized.slice(0, -1)
+	if (process.platform !== "win32") {
+		// For POSIX platforms, handle path normalization manually
+		// Convert all separators to forward slashes first
+		let normalized = p.replace(/\\/g, "/")
+		// Remove consecutive slashes except for UNC paths
+		normalized = normalized.replace(/\/+/g, "/")
+		// Remove trailing slash except for root
+		if (normalized.length > 1 && normalized.endsWith("/")) {
+			normalized = normalized.slice(0, -1)
+		}
+		// Resolve . and .. segments
+		const segments = normalized.split("/")
+		const result = []
+		for (const segment of segments) {
+			if (segment === "." || segment === "") {
+				continue
+			}
+			if (segment === "..") {
+				result.pop()
+			} else {
+				result.push(segment)
+			}
+		}
+		// Reconstruct the path
+		normalized = result.join("/")
+		// Handle root path
+		if (p.startsWith("/")) {
+			normalized = "/" + normalized
+		}
+		return normalized
+	} else {
+		// For Windows, use built-in normalize
+		let normalized = path.normalize(p)
+		// Remove trailing slash except for root paths
+		if (normalized.length > 1 && (normalized.endsWith("/") || normalized.endsWith("\\"))) {
+			normalized = normalized.slice(0, -1)
+		}
+		return normalized
 	}
-	return normalized
 }
 
 export function getReadablePath(cwd: string, relPath?: string): string {
@@ -91,7 +122,7 @@ export function getReadablePath(cwd: string, relPath?: string): string {
 	} else {
 		// show the relative path to the cwd
 		const normalizedRelPath = path.relative(cwd, absolutePath)
-		if (absolutePath.includes(cwd)) {
+		if (path.normalize(absolutePath).startsWith(path.normalize(cwd))) {
 			return normalizedRelPath.toPosix()
 		} else {
 			// we are outside the cwd, so show the absolute path (useful for when cline passes in '../../' for example)

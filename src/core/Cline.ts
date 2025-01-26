@@ -1,7 +1,8 @@
 import { Anthropic } from "@anthropic-ai/sdk"
+import { loadClineIgnoreFile } from "../utils/cline-ignore"
 import cloneDeep from "clone-deep"
 import { DiffStrategy, getDiffStrategy, UnifiedDiffStrategy } from "./diff/DiffStrategy"
-import { validateToolUse, isToolAllowedForMode, ToolName } from "./mode-validator"
+import { isToolAllowedForMode, ToolName } from "./mode-validator"
 import delay from "delay"
 import fs from "fs/promises"
 import os from "os"
@@ -76,6 +77,7 @@ export class Cline {
 	private urlContentFetcher: UrlContentFetcher
 	private browserSession: BrowserSession
 	private didEditFile: boolean = false
+	private ignoreContent: string = ""
 	customInstructions?: string
 	diffStrategy?: DiffStrategy
 	diffEnabled: boolean = false
@@ -131,6 +133,9 @@ export class Cline {
 		this.fuzzyMatchThreshold = fuzzyMatchThreshold ?? 1.0
 		this.providerRef = new WeakRef(provider)
 		this.diffViewProvider = new DiffViewProvider(cwd)
+
+		// Load ignore content once at initialization
+		loadClineIgnoreFile(cwd).then((content) => (this.ignoreContent = content))
 
 		if (historyItem) {
 			this.taskId = historyItem.id
@@ -1149,15 +1154,17 @@ export class Cline {
 					const { mode } = (await this.providerRef.deref()?.getState()) ?? {}
 					const { customModes } = (await this.providerRef.deref()?.getState()) ?? {}
 					try {
-						validateToolUse(
+						const isAllowed = isToolAllowedForMode(
 							block.name as ToolName,
 							mode ?? defaultModeSlug,
 							customModes ?? [],
-							{
-								apply_diff: this.diffEnabled,
-							},
+							{ apply_diff: this.diffEnabled },
 							block.params,
+							this.ignoreContent,
 						)
+						if (!isAllowed) {
+							throw new Error(`Tool "${block.name}" is not allowed in ${mode ?? defaultModeSlug} mode.`)
+						}
 					} catch (error) {
 						this.consecutiveMistakeCount++
 						pushToolResult(formatResponse.toolError(error.message))
@@ -2723,9 +2730,7 @@ export class Cline {
 
 		// Add warning if not in code mode
 		if (
-			!isToolAllowedForMode("write_to_file", currentMode, customModes ?? [], {
-				apply_diff: this.diffEnabled,
-			}) &&
+			!isToolAllowedForMode("write_to_file", currentMode, customModes ?? [], { apply_diff: this.diffEnabled }) &&
 			!isToolAllowedForMode("apply_diff", currentMode, customModes ?? [], { apply_diff: this.diffEnabled })
 		) {
 			const currentModeName = getModeBySlug(currentMode, customModes)?.name ?? currentMode

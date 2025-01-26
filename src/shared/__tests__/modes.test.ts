@@ -1,4 +1,4 @@
-import { isToolAllowedForMode, FileRestrictionError, ModeConfig } from "../modes"
+import { isToolAllowedForMode, FileRestrictionError, IgnoredFileError, ModeConfig } from "../modes"
 
 describe("isToolAllowedForMode", () => {
 	const customModes: ModeConfig[] = [
@@ -184,5 +184,49 @@ describe("FileRestrictionError", () => {
 			"This mode (Markdown Editor) can only edit files matching pattern: \\.md$ (Markdown files only). Got: test.js",
 		)
 		expect(error.name).toBe("FileRestrictionError")
+	})
+})
+
+describe("IgnoredFileError", () => {
+	it("formats error message correctly", () => {
+		const error = new IgnoredFileError("test.js")
+		expect(error.message).toBe("File test.js is ignored by .clineignore")
+		expect(error.name).toBe("IgnoredFileError")
+	})
+})
+
+describe("clineignore handling", () => {
+	const ignoreContent = "*.js\n!important.js\nnode_modules/"
+
+	it("throws IgnoredFileError for ignored files in read group", () => {
+		expect(() =>
+			isToolAllowedForMode("read_file", "code", [], undefined, { path: "test.js" }, ignoreContent),
+		).toThrow(IgnoredFileError)
+
+		expect(() =>
+			isToolAllowedForMode("read_file", "code", [], undefined, { path: "node_modules/test.ts" }, ignoreContent),
+		).toThrow(IgnoredFileError)
+	})
+
+	it("throws IgnoredFileError for ignored files in edit group", () => {
+		expect(() =>
+			isToolAllowedForMode("write_to_file", "code", [], undefined, { path: "test.js" }, ignoreContent),
+		).toThrow(IgnoredFileError)
+
+		expect(() =>
+			isToolAllowedForMode("apply_diff", "code", [], undefined, { path: "node_modules/test.ts" }, ignoreContent),
+		).toThrow(IgnoredFileError)
+	})
+
+	it("allows non-ignored files", () => {
+		expect(isToolAllowedForMode("read_file", "code", [], undefined, { path: "test.ts" }, ignoreContent)).toBe(true)
+
+		expect(
+			isToolAllowedForMode("write_to_file", "code", [], undefined, { path: "important.js" }, ignoreContent),
+		).toBe(true)
+	})
+
+	it("allows tools without paths", () => {
+		expect(isToolAllowedForMode("browser_action", "code", [], undefined, undefined, ignoreContent)).toBe(true)
 	})
 })

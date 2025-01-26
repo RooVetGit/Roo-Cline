@@ -1,4 +1,5 @@
 import { TOOL_GROUPS, ToolGroup, ALWAYS_AVAILABLE_TOOLS } from "./tool-groups"
+const { shouldIgnorePath } = require("../utils/cline-ignore")
 
 // Mode types
 export type Mode = string
@@ -154,12 +155,31 @@ export class FileRestrictionError extends Error {
 	}
 }
 
+// Custom error class for ignored files
+export class IgnoredFileError extends Error {
+	constructor(filePath: string) {
+		super(`File ${filePath} is ignored by .clineignore`)
+		this.name = "IgnoredFileError"
+	}
+}
+
+/**
+ * Checks if a tool is allowed for a given mode, including .clineignore restrictions
+ * @param tool The tool name to check
+ * @param modeSlug The mode slug to check against
+ * @param customModes Array of custom mode configurations
+ * @param toolRequirements Optional map of tool-specific requirements
+ * @param toolParams Optional parameters passed to the tool
+ * @param ignoreContent Optional .clineignore file content
+ * @returns true if tool is allowed, throws error otherwise
+ */
 export function isToolAllowedForMode(
 	tool: string,
 	modeSlug: string,
 	customModes: ModeConfig[],
 	toolRequirements?: Record<string, boolean>,
-	toolParams?: Record<string, any>, // All tool parameters
+	toolParams?: Record<string, any>,
+	ignoreContent?: string,
 ): boolean {
 	// Always allow these tools
 	if (ALWAYS_AVAILABLE_TOOLS.includes(tool as any)) {
@@ -186,6 +206,16 @@ export function isToolAllowedForMode(
 		// If the tool isn't in this group, continue to next group
 		if (!TOOL_GROUPS[groupName].includes(tool)) {
 			continue
+		}
+
+		// Check .clineignore for read/edit groups
+		if (
+			toolParams?.path &&
+			ignoreContent &&
+			(groupName === "read" || groupName === "edit") &&
+			shouldIgnorePath(toolParams.path, ignoreContent)
+		) {
+			throw new IgnoredFileError(toolParams.path)
 		}
 
 		// If there are no options, allow the tool

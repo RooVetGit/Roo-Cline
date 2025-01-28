@@ -7,6 +7,7 @@ import { formatResponse } from "../../core/prompts/responses"
 import { DecorationController } from "./DecorationController"
 import * as diff from "diff"
 import { diagnosticsToProblemsString, getNewDiagnostics } from "../diagnostics"
+import delay from "delay"
 
 export const DIFF_VIEW_URI_SCHEME = "cline-diff"
 
@@ -153,6 +154,35 @@ export class DiffViewProvider {
 
 		await vscode.window.showTextDocument(vscode.Uri.file(absolutePath), { preview: false })
 		await this.closeAllDiffViews()
+
+		try {
+			// Wait for Rust Analyzer to catch up before fetching post-diagnostics
+			const rustAnalyzer = vscode.extensions.getExtension("rust-lang.rust-analyzer")
+			if (rustAnalyzer?.isActive && (absolutePath.endsWith(".rs") || absolutePath.endsWith(".toml"))) {
+				const startTime = Date.now()
+				const INITIAL_DELAY = 1000 // 1 second
+				const TIMEOUT = 30000 // 30 seconds
+
+				// Give rust-analyzer some time to detect changes
+				while (rustAnalyzer.exports?.lastStatus?.quiescent === true) {
+					if (Date.now() - startTime > INITIAL_DELAY) {
+						break
+					}
+					await delay(50)
+				}
+
+				while (rustAnalyzer.exports?.lastStatus?.quiescent === false) {
+					if (Date.now() - startTime > TIMEOUT) {
+						console.error("Timeout waiting for rust-analyzer to become quiescent")
+						console.dir(rustAnalyzer.exports?.lastStatus)
+						break
+					}
+					await delay(100)
+				}
+			}
+		} catch (err) {
+			// We don't mind if rust-analyzer isn't installed
+		}
 
 		/*
 		Getting diagnostics before and after the file edit is a better approach than

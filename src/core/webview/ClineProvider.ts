@@ -152,9 +152,16 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 		this.workspaceTracker = new WorkspaceTracker(this)
 		this.mcpHub = new McpHub(this)
 		this.configManager = new ConfigManager(this.context)
+
 		this.customModesManager = new CustomModesManager(this.context, async () => {
 			await this.postStateToWebview()
 		})
+
+		this.context.subscriptions.push(
+			vscode.commands.registerCommand("roo-cline.setApiConfiguration", async (config: ApiConfiguration) => {
+				await this.updateApiConfiguration(config)
+			}),
+		)
 	}
 
 	/*

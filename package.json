@@ -100,7 +100,12 @@
 			{
 				"command": "roo-cline.openInNewTab",
 				"title": "Open In New Tab",
-				"category": "Roo Code"
+				"category": "Roo Cline"
+			},
+			{
+				"command": "roo-cline.setApiConfiguration",
+				"title": "Set API Configuration",
+				"category": "Roo Cline"
 			},
 			{
 				"command": "roo-cline.explainCode",

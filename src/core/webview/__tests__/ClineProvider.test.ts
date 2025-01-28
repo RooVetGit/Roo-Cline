@@ -320,6 +320,7 @@ describe("ClineProvider", () => {
 			requestDelaySeconds: 5,
 			mode: defaultModeSlug,
 			customModes: [],
+			keepBrowserOpen: false,
 		}
 
 		const message: ExtensionMessage = {

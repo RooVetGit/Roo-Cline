@@ -41,6 +41,7 @@ export interface ExtensionMessage {
 		| "autoApprovalEnabled"
 		| "updateCustomMode"
 		| "deleteCustomMode"
+		| "keepBrowserOpen"
 	text?: string
 	action?:
 		| "chatButtonClicked"
@@ -111,6 +112,7 @@ export interface ExtensionState {
 	autoApprovalEnabled?: boolean
 	customModes: ModeConfig[]
 	toolRequirements?: Record<string, boolean> // Map of tool names to their requirements (e.g. {"apply_diff": true} if diffEnabled)
+	keepBrowserOpen: boolean // Controls whether browser sessions persist between actions
 }
 
 export interface ClineMessage {

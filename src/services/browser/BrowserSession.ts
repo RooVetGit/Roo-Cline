@@ -19,9 +19,37 @@ export class BrowserSession {
 	private browser?: Browser
 	private page?: Page
 	private currentMousePosition?: string
+	private sessionTimeout?: NodeJS.Timeout
+	private readonly SESSION_TIMEOUT = 30 * 60 * 1000 // 30 minutes
 
 	constructor(context: vscode.ExtensionContext) {
 		this.context = context
+	}
+
+	private async getKeepBrowserOpen(): Promise<boolean> {
+		return this.context.globalState.get<boolean>("keepBrowserOpen") ?? false
+	}
+
+	private async resetSessionTimeout() {
+		if (this.sessionTimeout) {
+			clearTimeout(this.sessionTimeout)
+		}
+
+		const keepBrowserOpen = await this.getKeepBrowserOpen()
+		if (keepBrowserOpen) {
+			this.sessionTimeout = setTimeout(() => {
+				console.log("Browser session timed out after inactivity")
+				this.browser?.close().catch(() => {})
+				this.browser = undefined
+				this.page = undefined
+				this.currentMousePosition = undefined
+			}, this.SESSION_TIMEOUT)
+		} else {
+			this.sessionTimeout = setTimeout(() => {
+				console.log("Browser session timed out after inactivity")
+				this.closeBrowser()
+			}, this.SESSION_TIMEOUT)
+		}
 	}
 
 	private async ensureChromiumExists(): Promise<PCRStats> {
@@ -47,45 +75,57 @@ export class BrowserSession {
 
 	async launchBrowser(): Promise<void> {
 		console.log("launch browser called")
-		if (this.browser) {
-			// throw new Error("Browser already launched")
+		if (this.browser || this.page) {
 			await this.closeBrowser() // this may happen when the model launches a browser again after having used it already before
 		}
 
 		const stats = await this.ensureChromiumExists()
-		this.browser = await stats.puppeteer.launch({
-			args: [
-				"--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
-			],
-			executablePath: stats.executablePath,
-			defaultViewport: (() => {
-				const size = (this.context.globalState.get("browserViewportSize") as string | undefined) || "900x600"
-				const [width, height] = size.split("x").map(Number)
-				return { width, height }
-			})(),
-			// headless: false,
-		})
-		// (latest version of puppeteer does not add headless to user agent)
-		this.page = await this.browser?.newPage()
+		if (!this.browser || !this.page) {
+			this.browser = await stats.puppeteer.launch({
+				args: [
+					"--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+				],
+				executablePath: stats.executablePath,
+				defaultViewport: (() => {
+					const size =
+						(this.context.globalState.get("browserViewportSize") as string | undefined) || "900x600"
+					const [width, height] = size.split("x").map(Number)
+					return { width, height }
+				})(),
+				// headless: false,
+			})
+			// (latest version of puppeteer does not add headless to user agent)
+			this.page = await this.browser?.newPage()
+		}
 	}
 
 	async closeBrowser(): Promise<BrowserActionResult> {
 		if (this.browser || this.page) {
-			console.log("closing browser...")
-			await this.browser?.close().catch(() => {})
-			this.browser = undefined
-			this.page = undefined
-			this.currentMousePosition = undefined
+			const keepBrowserOpen = await this.getKeepBrowserOpen()
+			if (!keepBrowserOpen) {
+				console.log("closing browser...")
+				await this.browser?.close().catch(() => {})
+				this.browser = undefined
+				this.page = undefined
+				this.currentMousePosition = undefined
+			} else {
+				console.log("keeping browser open...")
+			}
 		}
 		return {}
 	}
 
 	async doAction(action: (page: Page) => Promise<void>): Promise<BrowserActionResult> {
-		if (!this.page) {
-			throw new Error(
-				"Browser is not launched. This may occur if the browser was automatically closed by a non-`browser_action` tool.",
-			)
+		if (!this.page || !this.browser) {
+			console.log("No browser/page found, launching new one")
+			await this.launchBrowser()
+			if (!this.page) {
+				throw new Error("Failed to launch browser")
+			}
 		}
+
+		// Reset timeout on each action
+		await this.resetSessionTimeout()
 
 		const logs: string[] = []
 		let lastLogTs = Date.now()

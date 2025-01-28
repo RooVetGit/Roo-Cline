@@ -80,6 +80,7 @@ export interface WebviewMessage {
 		| "deleteCustomMode"
 		| "setopenAiCustomModelInfo"
 		| "openCustomModesSettings"
+		| "keepBrowserOpen"
 	text?: string
 	disabled?: boolean
 	askResponse?: ClineAskResponse

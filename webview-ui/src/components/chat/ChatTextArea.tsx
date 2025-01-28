@@ -50,9 +50,40 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 		},
 		ref,
 	) => {
-		const { filePaths, currentApiConfigName, listApiConfigMeta, customModes } = useExtensionState()
+		const {
+			filePaths,
+			currentApiConfigName,
+			listApiConfigMeta,
+			customModes,
+			diffEnabled,
+			setDiffEnabled,
+			experimentalDiffStrategy,
+			setExperimentalDiffStrategy,
+		} = useExtensionState()
 		const [gitCommits, setGitCommits] = useState<any[]>([])
 		const [showDropdown, setShowDropdown] = useState(false)
+		const [diffStrategy, setDiffStrategy] = useState<string>("search-replace") // Default to 'search-replace'
+
+		// Initialize diffStrategy based on extension state
+		useEffect(() => {
+			if (!diffEnabled) {
+				setDiffStrategy("whole")
+			} else if (experimentalDiffStrategy) {
+				setDiffStrategy("unified-diff")
+			} else {
+				setDiffStrategy("search-replace")
+			}
+		}, [diffEnabled, experimentalDiffStrategy])
+
+		const updateDiffState = (type: string, value: boolean) => {
+			if (type === "diff") {
+				setDiffEnabled(value)
+				vscode.postMessage({ type: "diffEnabled", bool: value })
+			} else if (type === "experimental") {
+				setExperimentalDiffStrategy(value)
+				vscode.postMessage({ type: "experimentalDiffStrategy", bool: value })
+			}
+		}
 
 		// Close dropdown when clicking outside
 		useEffect(() => {
@@ -806,6 +837,46 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 								<option value="settings-action" style={{ ...optionStyle }}>
 									Edit...
 								</option>
+							</select>
+							<div style={caretContainerStyle}>
+								<CaretIcon />
+							</div>
+						</div>
+
+						<div
+							style={{
+								position: "relative",
+								display: "inline-block",
+								flex: "0 1 auto",
+								minWidth: 0,
+								maxWidth: "150px",
+								overflow: "hidden",
+							}}>
+							<select
+								value={diffStrategy}
+								disabled={textAreaDisabled}
+								onChange={(e) => {
+									const value = e.target.value
+									setDiffStrategy(value)
+									if (value === "whole") {
+										updateDiffState("diff", false)
+										updateDiffState("experimental", false)
+									} else if (value === "search-replace") {
+										updateDiffState("diff", true)
+										updateDiffState("experimental", false)
+									} else if (value === "unified-diff") {
+										updateDiffState("diff", true)
+										updateDiffState("experimental", true)
+									}
+								}}
+								style={{
+									...selectStyle,
+									width: "100%",
+									textOverflow: "ellipsis",
+								}}>
+								<option value="whole">whole</option>
+								<option value="search-replace">search-replace</option>
+								<option value="unified-diff">unified</option>
 							</select>
 							<div style={caretContainerStyle}>
 								<CaretIcon />

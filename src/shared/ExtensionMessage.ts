@@ -109,6 +109,7 @@ export interface ExtensionState {
 	enhancementApiConfigId?: string
 	experimentalDiffStrategy?: boolean
 	autoApprovalEnabled?: boolean
+	conversationSaveFolder?: string // Project-specific folder path for saving conversations
 	customModes: ModeConfig[]
 	toolRequirements?: Record<string, boolean> // Map of tool names to their requirements (e.g. {"apply_diff": true} if diffEnabled)
 }
@@ -212,6 +213,8 @@ export interface ClineApiReqInfo {
 	cost?: number
 	cancelReason?: ClineApiReqCancelReason
 	streamingFailedMessage?: string
+	provider?: string
+	model?: string
 }
 
 export type ClineApiReqCancelReason = "streaming_failed" | "user_cancelled"

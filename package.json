@@ -200,6 +200,11 @@
 						}
 					},
 					"description": "Settings for VSCode Language Model API"
+				},
+				"roo-cline.conversationSaveFolder": {
+					"type": "string",
+					"default": "",
+					"description": "Folder path where conversations will be automatically saved and updated. Can be absolute or relative to workspace root. Leave empty to disable conversation saving."
 				}
 			}
 		}

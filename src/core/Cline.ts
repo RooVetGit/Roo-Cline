@@ -59,6 +59,7 @@ import { detectCodeOmission } from "../integrations/editor/detect-omission"
 import { BrowserSession } from "../services/browser/BrowserSession"
 import { OpenRouterHandler } from "../api/providers/openrouter"
 import { McpHub } from "../services/mcp/McpHub"
+import { ConversationSaver } from "./conversation-saver"
 import crypto from "crypto"
 
 const cwd =
@@ -71,10 +72,28 @@ type UserContent = Array<
 
 export class Cline {
 	readonly taskId: string
-	api: ApiHandler
+	private _api: ApiHandler
+	private _apiProvider: string = "anthropic" // Default to anthropic as fallback
+
+	get api(): ApiHandler {
+		return this._api
+	}
+
+	set api(newApi: ApiHandler) {
+		this._api = newApi
+	}
+
+	get apiProvider(): string {
+		return this._apiProvider
+	}
+
+	set apiProvider(provider: string) {
+		this._apiProvider = provider
+	}
 	private terminalManager: TerminalManager
 	private urlContentFetcher: UrlContentFetcher
 	private browserSession: BrowserSession
+	private conversationSaver?: ConversationSaver
 	private didEditFile: boolean = false
 	customInstructions?: string
 	diffStrategy?: DiffStrategy
@@ -117,12 +136,15 @@ export class Cline {
 		historyItem?: HistoryItem | undefined,
 		experimentalDiffStrategy: boolean = false,
 	) {
+		this._api = buildApiHandler(apiConfiguration)
+		this._apiProvider = apiConfiguration.apiProvider ?? "anthropic"
 		if (!task && !images && !historyItem) {
 			throw new Error("Either historyItem or task/images must be provided")
 		}
 
 		this.taskId = crypto.randomUUID()
 		this.api = buildApiHandler(apiConfiguration)
+		this.apiProvider = apiConfiguration.apiProvider ?? "anthropic"
 		this.terminalManager = new TerminalManager()
 		this.urlContentFetcher = new UrlContentFetcher(provider.context)
 		this.browserSession = new BrowserSession(provider.context)
@@ -139,6 +161,11 @@ export class Cline {
 		// Initialize diffStrategy based on current state
 		this.updateDiffStrategy(experimentalDiffStrategy)
 
+		// Initialize conversation saver if folder is set
+		this.initializeConversationSaver(provider).catch((error) => {
+			console.error("Failed to initialize conversation saver:", error)
+		})
+
 		if (task || images) {
 			this.startTask(task, images)
 		} else if (historyItem) {
@@ -146,7 +173,41 @@ export class Cline {
 		}
 	}
 
+	private async initializeConversationSaver(provider: ClineProvider) {
+		const conversationSaveFolder = vscode.workspace.getConfiguration("roo-cline").get("conversationSaveFolder")
+		console.log("[Cline] Checking conversation save folder from workspace config:", conversationSaveFolder)
+
+		if (typeof conversationSaveFolder === "string" && conversationSaveFolder.length > 0) {
+			console.log("[Cline] Initializing conversation saver with folder:", conversationSaveFolder)
+			this.conversationSaver = new ConversationSaver(conversationSaveFolder, cwd)
+			// Verify folder can be created
+			await this.conversationSaver.saveConversation([])
+			console.log("[Cline] Successfully initialized conversation saver")
+		} else {
+			console.log("[Cline] No valid conversation save folder configured")
+			this.conversationSaver = undefined
+		}
+	}
+
 	// Add method to update diffStrategy
+	async updateConversationSaveFolder(folder?: string) {
+		// Update workspace configuration
+		await vscode.workspace
+			.getConfiguration("roo-cline")
+			.update("conversationSaveFolder", folder, vscode.ConfigurationTarget.Workspace)
+
+		// Update conversation saver instance
+		if (typeof folder === "string" && folder.length > 0) {
+			if (!this.conversationSaver) {
+				this.conversationSaver = new ConversationSaver(folder, cwd)
+			} else {
+				this.conversationSaver.updateSaveFolder(folder)
+			}
+		} else {
+			this.conversationSaver = undefined
+		}
+	}
+
 	async updateDiffStrategy(experimentalDiffStrategy?: boolean) {
 		// If not provided, get from current state
 		if (experimentalDiffStrategy === undefined) {
@@ -249,6 +310,15 @@ export class Cline {
 				cacheReads: apiMetrics.totalCacheReads,
 				totalCost: apiMetrics.totalCost,
 			})
+
+			// Save conversation if folder is set
+			if (this.conversationSaver) {
+				try {
+					await this.conversationSaver.updateConversation(this.clineMessages)
+				} catch (error) {
+					console.error("Failed to save conversation to folder:", error)
+				}
+			}
 		} catch (error) {
 			console.error("Failed to save cline messages:", error)
 		}
@@ -2280,11 +2350,18 @@ export class Cline {
 
 		// getting verbose details is an expensive operation, it uses globby to top-down build file structure of project which for large projects can take a few seconds
 		// for the best UX we show a placeholder api_req_started message with a loading spinner as this happens
+		const model = this.api.getModel()
+		const apiInfo = {
+			provider: this.apiProvider,
+			model: model.id,
+		}
+
 		await this.say(
 			"api_req_started",
 			JSON.stringify({
 				request:
 					userContent.map((block) => formatContentBlockToMarkdown(block)).join("\n\n") + "\n\nLoading...",
+				...apiInfo,
 			}),
 		)
 
@@ -2299,6 +2376,7 @@ export class Cline {
 		const lastApiReqIndex = findLastIndex(this.clineMessages, (m) => m.say === "api_req_started")
 		this.clineMessages[lastApiReqIndex].text = JSON.stringify({
 			request: userContent.map((block) => formatContentBlockToMarkdown(block)).join("\n\n"),
+			...apiInfo,
 		} satisfies ClineApiReqInfo)
 		await this.saveClineMessages()
 		await this.providerRef.deref()?.postStateToWebview()
@@ -2314,6 +2392,11 @@ export class Cline {
 			// fortunately api_req_finished was always parsed out for the gui anyways, so it remains solely for legacy purposes to keep track of prices in tasks from history
 			// (it's worth removing a few months from now)
 			const updateApiReqMsg = (cancelReason?: ClineApiReqCancelReason, streamingFailedMessage?: string) => {
+				const model = this.api.getModel()
+				const apiInfo = {
+					provider: this.apiProvider,
+					model: model.id,
+				}
 				this.clineMessages[lastApiReqIndex].text = JSON.stringify({
 					...JSON.parse(this.clineMessages[lastApiReqIndex].text || "{}"),
 					tokensIn: inputTokens,
@@ -2322,15 +2405,10 @@ export class Cline {
 					cacheReads: cacheReadTokens,
 					cost:
 						totalCost ??
-						calculateApiCost(
-							this.api.getModel().info,
-							inputTokens,
-							outputTokens,
-							cacheWriteTokens,
-							cacheReadTokens,
-						),
+						calculateApiCost(model.info, inputTokens, outputTokens, cacheWriteTokens, cacheReadTokens),
 					cancelReason,
 					streamingFailedMessage,
+					...apiInfo,
 				} satisfies ClineApiReqInfo)
 			}
 

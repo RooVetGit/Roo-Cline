@@ -3,6 +3,7 @@ import * as childProcess from "child_process"
 import * as path from "path"
 import * as fs from "fs"
 import * as readline from "readline"
+import { loadClineIgnoreFile, loadIgnorePatterns } from "../../utils/cline-ignore"
 
 /*
 This file provides functionality to perform regex searches on files using ripgrep.
@@ -178,8 +179,9 @@ export async function regexSearchFiles(
 	if (currentResult) {
 		results.push(currentResult as SearchResult)
 	}
-
-	return formatResults(results, cwd)
+	const { shouldIgnore } = await loadIgnorePatterns(cwd)
+	const filteredResults = results.filter((result) => !shouldIgnore(result.file.replace(`${cwd}/`, "")))
+	return formatResults(filteredResults, cwd)
 }
 
 function formatResults(results: SearchResult[], cwd: string): string {
